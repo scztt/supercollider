@@ -46,6 +46,7 @@ unsigned char* dumpOneByteCode(PyrBlock *theBlock, PyrClass* theClass, unsigned 
 	long i, n, ival, jmplen;
 	long numArgNames, numVarNames, numTemps;
 	unsigned char *ipbeg;
+	uint32 line, character;
 
 	if (theClass == NULL) {
 		block = theBlock;
@@ -70,7 +71,16 @@ unsigned char* dumpOneByteCode(PyrBlock *theBlock, PyrClass* theClass, unsigned 
 	ipbeg = slotRawInt8Array(&theBlock->code)->b;
 	n = ip - ipbeg;
 	op1 = *ip++;
-	post("%3d   %02X", n, op1);
+
+	if( theBlock->debugTable.uo )
+	{
+		line = *( ((PyrInt32Array*)theBlock->debugTable.uo)->i + (2*(ip - (theBlock->code.uob->b) - 1)) );
+		character = *( ((PyrInt32Array*)theBlock->debugTable.uo)->i + (1+2*(ip - (theBlock->code.uob->b) - 1)) );
+	} else {
+		line = 0; character = 0;
+	}
+	
+	post("(%3i + %3i)   %3d   %02X", line, character, n, op1);
 	switch (op1) {
 		case 0 : //	push class
 			op2 = *ip++; // get literal index

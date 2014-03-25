@@ -27,10 +27,13 @@ VMGlobals::VMGlobals()
 	thread(0), method(0), block(0), frame(0), primitiveMethod(0),
 	ip(0), sp(0), numpop(0),
 	primitiveIndex(0),
-	execMethod(0)
+	execMethod(0),
+	debugFlag(false),
+	currentLine(0)
 {
 	SetNil(&receiver);
 	SetNil(&result);
+	SetNil(&debugFrame);
 }
 
 

@@ -88,6 +88,7 @@ struct PyrParseNode {
 	virtual ~PyrParseNode() {}
 	virtual void compile(PyrSlot *result) = 0;
 	virtual void dump(int level) = 0;
+	void postDebugPosition();
 
 	struct PyrParseNode *mNext;
 	struct PyrParseNode *mTail;

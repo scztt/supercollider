@@ -92,24 +92,24 @@ Object  {
 			performList(item[0], item[1], item[2..])
 		}
 	}
-
+	
 	performWithEnvir { |selector, envir|
 		var argNames, args;
 		var method = this.class.findRespondingMethodFor(selector);
 
 		if(method.isNil) { ^this.doesNotUnderstand(selector) };
-
+		
 		argNames = method.argNames.drop(1);
 		args = method.prototypeFrame.drop(1);
 		argNames.do { |name, i|
 			var val = envir[name];
 			val !? { args[i] = val };
 		};
-
+		
 		^this.performList(selector, args)
 	}
 
-	performKeyValuePairs { |selector, pairs|
+	performKeyValuePairs { |selector, pairs|		
 		^this.performWithEnvir(selector, ().putPairs(pairs))
 	}
 
@@ -155,7 +155,7 @@ Object  {
 			properties.every { |selector| this.perform(selector) == that.perform(selector) }
 		}
 	}
-	compareObject { arg that, instVarNames;
+	compareObject { arg that,instVarNames;
 		if(this === that,{ ^true });
 		// possibly ok if one of us isKindOf the other
 		if(this.class !== that.class,{ ^false });
@@ -365,7 +365,7 @@ Object  {
 			stream << "(" <<<* this.simplifyStoreArgs(args) << ")";
 		} {
 			stream << ".new"
-		}
+	}
 	}
 	simplifyStoreArgs { arg args;
 		var res = Array.new, newMethod, methodArgs;
@@ -454,6 +454,10 @@ Object  {
 		_RoutineYieldAndReset
 		^this.primitiveFailed
 	}
+	break {
+		_RoutineDebugBreak
+		^this.primitiveFailed;
+	}
 	idle { arg val;
 		var time = thisThread.beats;
 		while { thisThread.beats - time < val } { this.value.yield }
@@ -505,7 +509,7 @@ Object  {
 		if(function.isKindOf(Function).not) {
 			Error("A method must be defined using a function").throw
 		};
-		if(uniqueMethods.isNil, { uniqueMethods = IdentityDictionary.new });
+		if (uniqueMethods.isNil, { uniqueMethods = IdentityDictionary.new });
 		methodDict = uniqueMethods.at(this);
 		if (methodDict.isNil, {
 			methodDict = IdentityDictionary.new;
@@ -561,7 +565,7 @@ Object  {
 	>> { arg that; ^rightShift(this, that) }
 	+>> { arg that; ^unsignedRightShift(this, that) }
 	<! { arg that; ^firstArg(this, that) }
-
+	
 	asInt { ^this.asInteger }
 
 	blend { arg that, blendFrac = 0.5;
@@ -900,5 +904,21 @@ Object  {
 
 	help {
 		this.class.asString.help
+	}
+	
+	enableDebug {
+		_EnableDebug
+		^this.primitiveFailed;
+	}
+	
+	disableDebug {
+		_DisableDebug
+		^this.primitiveFailed;
+	}
+	
+	setDebugClass {
+		| class |
+		_SetDebugClass
+		^this.primativeFailed;
 	}
 }

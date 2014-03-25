@@ -38,5 +38,6 @@ int definePrimitiveWithKeys(int base, int index, const char *name,
 	int numArgs, int varArgs);
 int getPrimitiveNumArgs(int index);
 PyrSymbol* getPrimitiveName(int index);
+int prRoutineYield(struct VMGlobals *g, int numArgsPushed);
 
 #endif

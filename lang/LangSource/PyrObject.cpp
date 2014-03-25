@@ -909,7 +909,7 @@ void buildClassTree()
 
 	// alpha sort the classes via insertion sort
 	gClassList = sortClasses(gClassList);
-}
+			}
 
 void indexClassTree(PyrClass *classobj, int numSuperMethods)
 {
@@ -917,7 +917,7 @@ void indexClassTree(PyrClass *classobj, int numSuperMethods)
 
 	if (!classobj) return;
 
-	SetInt(&classobj->classIndex, gNumClasses);
+	SetInt(&classobj->classIndex, 	gNumClasses);
 	gNumClasses ++;
 
 	if (IsObj(&classobj->methods)) {
@@ -932,7 +932,7 @@ void indexClassTree(PyrClass *classobj, int numSuperMethods)
 		PyrObject * subclasses = slotRawObject(&classobj->subclasses);
 		for (i=0; i<subclasses->size; ++i)
 			indexClassTree(slotRawClass(&subclasses->slots[i]), numMethods);
-	}
+		}
 	SetInt(&classobj->maxSubclassIndex,  gNumClasses - 1);
 }
 
@@ -1110,7 +1110,7 @@ static void binsortClassRows(PyrMethod ** bigTable, const ColumnDescriptor* sels
 }
 
 static void prepareColumnTable(ColumnDescriptor * sels, int numSelectors)
-{
+	{
 	// fill selector table
 	//post("fill selector table\n");
 	SymbolTable* symbolTable = gMainVMGlobals->symbolTable;
@@ -1118,7 +1118,7 @@ static void prepareColumnTable(ColumnDescriptor * sels, int numSelectors)
 		PyrSymbol *sym = symbolTable->Get(i);
 		if (sym && (sym->flags & sym_Selector))
 			sels[j++].selector = sym;
-	}
+		}
 
 	for (int i=0; i<numSelectors; ++i) {
 		//postfl("%3d %s\n", i, sels[i].selector->name);
@@ -1160,7 +1160,7 @@ static void calcRowStats(PyrMethod** bigTable, ColumnDescriptor * sels, int numC
 			}
 		}
 	}
-}
+	}
 
 
 void buildBigMethodMatrix()
@@ -1272,10 +1272,10 @@ void buildBigMethodMatrix()
 		offset = sels[i].rowOffset + sels[i].minClassIndex;
 		maxwidth = offset + sels[i].rowWidth;
 		row = bigTable + sels[i].minClassIndex * numSelectors + i;
-		PyrMethod ** table = gRowTable;
+		PyrMethod **table = gRowTable;
 		for (j=offset,k=0; j<maxwidth; ++j, k+=numSelectors) {
 			if (row[k])
-				table[j] = row[k];
+			table[j] = row[k];
 		}
 	}
 	//fclose(fp);
@@ -1413,11 +1413,11 @@ PyrClass* makeIntrinsicClass(PyrSymbol *className, PyrSymbol *superClassName,
 	int numInstVars, int numClassVars)
 {
 	PyrClass *superClass = NULL;
-	PyrClass *metaSuperClass = NULL;
+  PyrClass *metaSuperClass = NULL;
 	PyrSymbol *metaClassName = NULL;
 	PyrSymbol *metaSuperClassName = NULL;
 	PyrClass *classobj = NULL;
-	PyrClass *metaclassobj = NULL;
+  PyrClass *metaclassobj = NULL;
 	int superInstVars;
 
 	//postfl("makeIntrinsicClass '%s'\n", className->name);
@@ -1595,6 +1595,7 @@ void initClasses()
 		addIntrinsicVar(class_fundef, "argNames", &o_nil);
 		addIntrinsicVar(class_fundef, "varNames", &o_nil);
 		addIntrinsicVar(class_fundef, "sourceCode", &o_nil);
+		addIntrinsicVar(class_fundef, "debugTable", &o_nil);
 
 	class_method = makeIntrinsicClass(s_method, s_fundef, 5, 0);
 		addIntrinsicVar(class_method, "ownerClass", &o_nil);
@@ -1662,11 +1663,16 @@ void initClasses()
 		addIntrinsicVar(class_thread, "endValue", &o_nil);
 
 		addIntrinsicVar(class_thread, "environment", &o_nil);
+		
+		addIntrinsicVar(class_thread, "line", &o_zero);
+		addIntrinsicVar(class_thread, "character", &o_zero);
+		addIntrinsicVar(class_thread, "debugging", &o_false);
+
 		addIntrinsicVar(class_thread, "exceptionHandler", &o_nil);
 		addIntrinsicVar(class_thread, "threadPlayer", &o_nil);
-
 		addIntrinsicVar(class_thread, "executingPath", &o_nil);
 		addIntrinsicVar(class_thread, "oldExecutingPath", &o_nil);
+		addIntrinsicVar(class_thread, "dContinue", &o_false);
 
 	class_finalizer = makeIntrinsicClass(s_finalizer, s_object, 2, 0);
 		addIntrinsicVar(class_finalizer, "cFunction", &o_nil);
@@ -2745,9 +2751,9 @@ int calcHash(PyrSlot *a)
 	case tagInt : hash = Hash(slotRawInt(a)); break;
 	case tagChar : hash = Hash(slotRawChar(a) & 255); break;
 	case tagSym : hash = slotRawSymbol(a)->hash; break;
-	case tagNil : hash = 0xA5A5A5A5; break;
-	case tagFalse : hash = 0x55AA55AA; break;
-	case tagTrue : hash = 0x69696969; break;
+		case tagNil : hash = 0xA5A5A5A5; break;
+		case tagFalse : hash = 0x55AA55AA; break;
+		case tagTrue : hash = 0x69696969; break;
 	case tagPtr : hash = hashPtr(slotRawPtr(a)); break;
 	default :
 		// hash for a double
