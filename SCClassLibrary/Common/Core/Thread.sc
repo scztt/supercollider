@@ -16,9 +16,10 @@ Thread : Stream {
 	var environment;
 	var <line, <character;
 	var <>debugging;
-	var dContinue;
 	var <>exceptionHandler, >threadPlayer;
 	var <executingPath, <oldExecutingPath;
+	var stackSize;
+	var dContinue;
 
 	*new { arg func, stackSize = (512);
 		^super.new.init(func, stackSize)
