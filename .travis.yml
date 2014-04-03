@@ -1,8 +1,7 @@
-language: cpp
+language: objective-c
 
 compiler: 
- - objective-c
- - clang 
+ - clang
 
 before_install:
  - brew update
