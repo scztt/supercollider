@@ -1,6 +1,7 @@
 language: cpp
 
 compiler: 
+ - objective-c
  - clang 
 
 before_install:
