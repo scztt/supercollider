@@ -17,5 +17,3 @@ script: make
 notifications:
  email:
    - scott@artificia.org
- on_success: always
- on_failure: always
