@@ -24,6 +24,7 @@
 #include "util/docklet.hpp"
 #include <QAction>
 #include <QPlainTextEdit>
+#include <QPropertyAnimation>
 
 namespace ScIDE {
 
@@ -62,6 +63,8 @@ public:
 
 signals:
     void scrollToBottomRequest();
+    void textUpdated();
+    void postWindowFocusChanged(bool);
 
 public slots:
     void post(const QString &text);
@@ -78,6 +81,7 @@ public slots:
 protected:
     virtual bool event( QEvent * );
     virtual void wheelEvent( QWheelEvent * );
+    virtual void focusInEvent(QFocusEvent *);
     virtual void focusOutEvent (QFocusEvent *e);
     virtual void mouseDoubleClickEvent(QMouseEvent *e);
     virtual QMimeData *createMimeDataFromSelection() const;
@@ -91,6 +95,7 @@ private:
     void createActions( Settings::Manager * );
     void updateActionShortcuts( Settings::Manager * );
     void zoomFont(int steps);
+    QTextCharFormat formatForPostLine(QStringRef line);
 
     QAction * mActions[ActionCount];
     /*
@@ -98,6 +103,7 @@ private:
     QAction * mClearAction;
     QAction * mLineWrapAction;*/
     QSize mSizeHint;
+    bool autohide;
 };
 
 
@@ -111,9 +117,16 @@ public:
 
 private slots:
     void onFloatingChanged(bool floating);
+    void onTextUpdated();
+    void onFocusChanged(bool);
+
+private:
+    void startFadeout();
+    void cancelFadeout();
 
 public:
     PostWindow * mPostWindow;
+    QPropertyAnimation* mAnimation;
 };
 
 } // namespace ScIDE

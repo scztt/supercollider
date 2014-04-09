@@ -44,6 +44,7 @@ PostWindow::PostWindow(QWidget* parent):
     setReadOnly(true);
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     setFrameShape( QFrame::NoFrame );
+    autohide = true;
 
     viewport()->setAttribute( Qt::WA_MacNoClickThrough, true );
 
@@ -139,17 +140,22 @@ void PostWindow::applySettings(Settings::Manager * settings)
     QFont font = settings->codeFont();
 
     QPalette palette;
+    QTextCharFormat format;
     settings->beginGroup("IDE/editor/colors");
     if (settings->contains("text")) {
-        QTextCharFormat format = settings->value("text").value<QTextCharFormat>();
-        QBrush bg = format.background();
-        QBrush fg = format.foreground();
-        if (bg.style() != Qt::NoBrush)
-            palette.setBrush(QPalette::Base, bg);
-        if (fg.style() != Qt::NoBrush)
-            palette.setBrush(QPalette::Text, fg);
+        format.merge(settings->value("text").value<QTextCharFormat>());
+    }
+    if (settings->contains("postwindowtext")) {
+        format.merge(settings->value("postwindowtext").value<QTextCharFormat>());
     }
     settings->endGroup(); // colors
+
+    QBrush bg = format.background();
+    QBrush fg = format.foreground();
+    if (bg.style() != Qt::NoBrush)
+        palette.setBrush(QPalette::Base, bg);
+    if (fg.style() != Qt::NoBrush)
+        palette.setBrush(QPalette::Text, fg);
 
     bool lineWrap = settings->value("IDE/postWindow/lineWrap").toBool();
 
@@ -185,15 +191,52 @@ QString PostWindow::symbolUnderCursor()
 
 void PostWindow::post(const QString &text)
 {
-    QScrollBar *scrollBar = verticalScrollBar();
     bool scroll = mActions[AutoScroll]->isChecked();
-
     QTextCursor c(document());
-    c.movePosition(QTextCursor::End);
-    c.insertText(text);
+    
+    int startPos = 0, length = 0;
+    QChar linebreak = QChar('\n');
+    foreach(const QChar chr, text) {
+        ++length;
+        if (chr == linebreak && length > 0) {
+            QStringRef newLine(&text, startPos, length);
+            c.movePosition(QTextCursor::End);
+            c.insertText(newLine.toString(), formatForPostLine(newLine));
+            startPos += length;
+            length = 0;
+        }
+    }
 
+    emit(textUpdated());
     if (scroll)
         emit(scrollToBottomRequest());
+}
+    
+QTextCharFormat PostWindow::formatForPostLine(QStringRef line)
+{
+    Settings::Manager *settings = Main::settings();
+    settings->beginGroup("IDE/editor/highlighting");
+    QTextCharFormat postWindowError = settings->value("postwindowerror").value<QTextCharFormat>();
+    QTextCharFormat postWindowWarning = settings->value("postwindowwarning").value<QTextCharFormat>();
+    QTextCharFormat postWindowSuccess = settings->value("postwindowsuccess").value<QTextCharFormat>();
+    QTextCharFormat postWindowEmphasis = settings->value("postwindowemphasis").value<QTextCharFormat>();
+    settings->endGroup();
+    
+    QTextCharFormat format;
+    
+    if (line.startsWith("ERROR:", Qt::CaseInsensitive) || line.startsWith("!"))
+        format.merge(postWindowError);
+    
+    if (line.startsWith("WARNING:", Qt::CaseInsensitive) || line.startsWith("?"))
+        format.merge(postWindowWarning);
+    
+    if (line.startsWith("->"))
+        format.merge(postWindowSuccess);
+    
+    if (line.startsWith("***"))
+        format.merge(postWindowEmphasis);
+    
+    return format;
 }
 
 void PostWindow::scrollToBottom()
@@ -280,6 +323,12 @@ void PostWindow::wheelEvent( QWheelEvent * e )
     QPlainTextEdit::wheelEvent(e);
 #endif
 }
+    
+void PostWindow::focusInEvent( QFocusEvent * event )
+{
+    QPlainTextEdit::focusInEvent(event);
+    emit postWindowFocusChanged(event->gotFocus());
+}
 
 void PostWindow::focusOutEvent( QFocusEvent * event )
 {
@@ -287,6 +336,8 @@ void PostWindow::focusOutEvent( QFocusEvent * event )
         MainWindow::instance()->focusCodeEditor();
     else
         QPlainTextEdit::focusOutEvent(event);
+    
+    emit postWindowFocusChanged(event->gotFocus());
 }
 
 void PostWindow::mouseDoubleClickEvent(QMouseEvent *e)
@@ -337,6 +388,7 @@ void PostWindow::setLineWrap(bool lineWrapOn)
 }
 
 PostDocklet::PostDocklet(QWidget* parent):
+    mAnimation(NULL),
     Docklet(tr("Post window"), parent)
 {
     setAllowedAreas(Qt::BottomDockWidgetArea | Qt::RightDockWidgetArea | Qt::LeftDockWidgetArea);
@@ -347,6 +399,8 @@ PostDocklet::PostDocklet(QWidget* parent):
     toolBar()->addAction( mPostWindow->mActions[PostWindow::AutoScroll] );
 
     //connect(this, SIGNAL(topLevelChanged(bool)), this, SLOT(onFloatingChanged(bool)));
+    connect(mPostWindow, SIGNAL(textUpdated()), this, SLOT(onTextUpdated()));
+    connect(mPostWindow, SIGNAL(postWindowFocusChanged(bool)), this, SLOT(onFocusChanged(bool)));
 }
 
 void PostDocklet::onFloatingChanged(bool floating)
@@ -357,6 +411,56 @@ void PostDocklet::onFloatingChanged(bool floating)
     // The issue is avoided by slightly shrinking the dock widget.
     if (floating)
         dockWidget()->resize(dockWidget()->size() - QSize(1,1));
+}
+    
+void PostDocklet::cancelFadeout() {
+    if (mAnimation) {
+        mAnimation->stop();
+        mAnimation->deleteLater();
+        mAnimation = NULL;
+    }
+    
+    QWidget* container = dockWidget();
+    if (container) {
+        container->setWindowOpacity(1.0);
+    }
+}
+    
+void PostDocklet::startFadeout() {
+    QWidget* container = dockWidget();
+    if (container && container == currentContainer()) {
+        
+        if (mAnimation) {
+            mAnimation->setCurrentTime(0);
+            mAnimation->start();
+        } else {
+            mAnimation = new QPropertyAnimation(container, "windowOpacity");
+            mAnimation->setEasingCurve(QEasingCurve::InBack);
+            mAnimation->setDuration(2500);
+            mAnimation->setStartValue(1.0);
+            mAnimation->setEndValue(0.0);
+            mAnimation->start();
+        }
+    }
+}
+    
+void PostDocklet::onTextUpdated() {
+    QWidget* focused = QApplication::focusWidget();
+    if (focused) {
+        if (focused == dockWidget() || focused == window() || focused == widget() || focused == toolBar()) {
+            return;
+        }
+    }
+    
+    startFadeout();
+}
+    
+void PostDocklet::onFocusChanged(bool focused) {
+    if (focused) {
+        cancelFadeout();
+    } else {
+        startFadeout();
+    }
 }
 
 } // namespace ScIDE
