@@ -1,9 +1,9 @@
 language: 
- - objective-c
  - cpp
 
 compiler: 
  - clang
+ - objective-c
 
 cache: apt
 
