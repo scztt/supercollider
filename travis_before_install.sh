@@ -7,8 +7,8 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
 		libqt4-dbg libqt4-dbus libqt4-designer libqt4-dev \
 		libqt4-gui libqt4-help libqt4-network libqt4-opengl \
 		libqt4-opengl-dev libqt4-qt3support libqt4-script \
-		libqt4-sql libqt4-sql-ibase libqt4-sql-mysql libqt4-sql-odbc \
-		libqt4-sql-psql libqt4-sql-sqlite libqt4-sql-sqlite2 \
+		libqt4-sql libqt4-sql-mysql libqt4-sql-odbc \
+		libqt4-sql-psql libqt4-sql-sqlite \
 		libqt4-svg libqt4-test libqt4-webkit libqt4-webkit-dbg \
 		libqt4-xml libqt4-xmlpatterns libqt4-xmlpatterns-dbg \
 		libqtcore4 libqtgui4 qt4-demos qt4-designer qt4-dev-tools \
