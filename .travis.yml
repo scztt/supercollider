@@ -5,12 +5,12 @@ compiler:
 
 before_install:
  - brew update
- - brew install qt4
+ - brew install qt
 
 before_script:
  - mkdir BUILD
  - cd BUILD
- - cmake -DCMAKE_PREFIX_PATH=/usr/local/Cellar/qt5/5.2.1 -DSC_QT=1 .. --debug-output
+ - cmake -DCMAKE_PREFIX_PATH=/usr/local/Cellar/qt4/4.8.5 -DSC_QT=1 .. --debug-output
 
 script: make
 
