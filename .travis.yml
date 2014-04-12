@@ -4,7 +4,6 @@ language:
 
 compiler: 
  - clang
- - objective-c
 
 cache: apt
 
