@@ -4,8 +4,7 @@ compiler:
  - clang
 
 before_install:
- - brew update
- - brew install qt
+ - ./travis_before_install.sh
 
 before_script:
  - mkdir BUILD
