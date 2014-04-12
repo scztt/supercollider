@@ -1,5 +1,6 @@
 language: 
  - cpp
+ - objective-c
 
 compiler: 
  - clang
