@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
-	sudo apt-add-repository ppa:ubuntu-sdk-team/ppa
+	sudo apt-add-repository -y ppa:ubuntu-sdk-team/ppa
 	sudo apt-get update
 	#sudo apt-get install qt5-default qt5-qmake qttools5-dev qttools5-dev-tools qtdeclarative5-dev libqt5webkit5-dev qtchooser
 	sudo apt-get install libqt4-assistant libqt4-core \
