@@ -1,7 +1,11 @@
-language: objective-c
+language: 
+ - objective-c
+ - cpp
 
 compiler: 
  - clang
+
+cache: apt
 
 before_install:
  - ./travis_before_install.sh
