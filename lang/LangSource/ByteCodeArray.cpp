@@ -28,6 +28,13 @@
 ByteCodes gCompilingByteCodes;
 long totalByteCodes = 0;
 
+DebugTable sDebugTable[32];
+DebugTable debugTable;
+int debugStackPosition=-1;
+bool debugging = false;
+DebugTable ptable;
+DebugPosition *ptableposition;
+
 void initByteCodes()
 {
 	if (gCompilingByteCodes) {
@@ -73,6 +80,19 @@ void compileByte(long byte)
 	}
 	totalByteCodes++;
 	*gCompilingByteCodes->ptr++ = byte;
+	if( debugging )
+	{
+		if( (debugTable->ptr - debugTable->positions)*sizeof(DebugPosition) >= (debugTable->size) )
+		{
+			reallocDebugTable(debugTable);
+		}
+		debugSanityCheck();
+		*debugTable->ptr++ = debugTable->currentPosition;
+		if( abs(debugTableLength( debugTable )) > 200 ) 
+		{
+			debugSanityCheck();
+		}
+	}
 }
 
 int compileNumber(unsigned long value)
@@ -98,6 +118,13 @@ void compileAndFreeByteCodes(ByteCodes byteCodes)
 	freeByteCodes(byteCodes);
 }
 
+void compileAndFreeByteCodes(ByteCodes byteCodes, DebugTable tempTable)
+{
+	compileByteCodes(byteCodes, tempTable);
+	freeByteCodes(byteCodes);
+	freeDebugTable(tempTable);
+}
+
 void copyByteCodes(Byte *dest, ByteCodes byteCodes)
 {
   memcpy(dest, byteCodes->bytes, byteCodeLength(byteCodes));
@@ -119,7 +146,7 @@ ByteCodes saveByteCodeArray()
 
 	curByteCodes = gCompilingByteCodes;
 	gCompilingByteCodes = NULL;
-
+	
 	return curByteCodes;
 }
 
@@ -132,6 +159,12 @@ size_t byteCodeLength(ByteCodes byteCodes)
 {
     if (!byteCodes) return 0;
     return (byteCodes->ptr - byteCodes->bytes);
+}
+
+int debugTableLength(DebugTable debugTable)
+{
+    if (!debugTable) return 0;
+    return (debugTable->ptr - debugTable->positions);
 }
 
 /***********************************************************************
@@ -157,6 +190,28 @@ void compileByteCodes(ByteCodes byteCodes)
   //postfl("\n\n");
 }
 
+void compileByteCodes(ByteCodes byteCodes, DebugTable tempTable)
+{
+	Byte		*ptr;
+	int i;
+	
+	if (byteCodes == NULL) return;
+	DebugPosition *position = tempTable->positions;
+	//postfl("[%d]\n", byteCodes->ptr - byteCodes->bytes);
+	for (i=0, ptr = byteCodes->bytes; ptr < byteCodes->ptr; ptr++, ++i) {
+		debugTable->currentPosition = *position++;
+		compileByte(*ptr);
+		
+		//postfl("%02X ", *ptr);
+		//if ((i & 15) == 15) postfl("\n");
+	}
+	//postfl("\n\n");
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////
+// ByteCodes allocation
+////////////////////////////////////////////////////////////////////////////////////
 ByteCodes allocByteCodes()
 {
 	ByteCodes	newByteCodes;
@@ -194,7 +249,6 @@ void reallocByteCodes(ByteCodes byteCodes)
 	byteCodes->size = newLen;
 }
 
-
 void freeByteCodes(ByteCodes byteCodes)
 {
 	//postfl("freeByteCodes %0X\n", byteCodes);
@@ -202,4 +256,152 @@ void freeByteCodes(ByteCodes byteCodes)
 		pyr_pool_compile->Free(byteCodes->bytes);
 		pyr_pool_compile->Free(byteCodes);
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+// DebugTable allocation
+////////////////////////////////////////////////////////////////////////////////////
+DebugTable allocDebugTable()
+{
+	DebugTable newDebugTable = (DebugTable)pyr_pool_compile->Alloc(sizeof(DebugTableArray));
+	MEMFAIL(newDebugTable);
+	newDebugTable->positions = (DebugPosition *)pyr_pool_compile->Alloc(DEBUG_TABLE_CHUNK_SIZE);
+	MEMFAIL(newDebugTable->positions);
+	newDebugTable->positions->line = 0;
+	newDebugTable->positions->character = 0;
+	newDebugTable->currentPosition.line = 0;
+	newDebugTable->currentPosition.character = 0;
+	newDebugTable->ptr = newDebugTable->positions;
+	newDebugTable->size = DEBUG_TABLE_CHUNK_SIZE;
+	debugSanityCheck();
+	return newDebugTable;
+}
+
+void reallocDebugTable(DebugTable debugTable)
+{
+	DebugPosition		*newPositions;
+	int		newLen;
+	
+	if (debugTable->size != (debugTable->ptr - debugTable->positions)*sizeof(DebugPosition)) {
+		error("reallocDebugTable called with size != debugTable len");
+	}
+	
+	newLen = debugTable->size << 1;
+
+	newPositions = (DebugPosition *)pyr_pool_compile->Alloc(newLen);
+	MEMFAIL(newPositions);
+	memcpy(newPositions, debugTable->positions, debugTable->size);
+	pyr_pool_compile->Free(debugTable->positions);
+	
+	debugTable->positions = newPositions;
+	debugTable->ptr = newPositions + (debugTable->size/sizeof(DebugPosition));
+	debugTable->size = newLen;
+
+	debugTable->ptr->line = 0;
+	debugTable->ptr->character = 0;
+	
+	debugSanityCheck();
+}
+
+void freeDebugTable(DebugTable debugTable)
+{
+	if (debugTable != NULL) {
+		pyr_pool_compile->Free(debugTable->positions);
+		pyr_pool_compile->Free(debugTable);
+	}
+	debugSanityCheck();
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+// extern debug functions
+////////////////////////////////////////////////////////////////////////////////////
+
+void debugTablePush()
+{
+	if( debugStackPosition==-1 )
+	{
+		sDebugTable[0] = allocDebugTable();
+		debugTable = sDebugTable[0];
+		debugTable->currentPosition.line = 0; 
+		debugTable->currentPosition.character = 0; 
+		debugStackPosition = 0;
+		debugging = true;
+	} else {
+		debugStackPosition++;
+		if( debugStackPosition > 31 )
+		{
+			postfl("Stack too deep. Serious problems.");
+		} else {
+			sDebugTable[debugStackPosition] = allocDebugTable( );
+			debugSanityCheck();
+			debugTable = sDebugTable[debugStackPosition];
+			debugSanityCheck();
+			debugTable->currentPosition = sDebugTable[debugStackPosition-1]->currentPosition;
+			debugSanityCheck();
+		}
+	};	
+	debugSanityCheck();
+}
+
+DebugTable debugTablePop()
+{
+	DebugTable poppedTable = debugTable;
+	
+	sDebugTable[ debugStackPosition-- ] = NULL;
+	if( debugStackPosition == -1 )
+		debugging = false;
+	else
+		debugTable = sDebugTable[ debugStackPosition ];
+	debugSanityCheck();
+	return poppedTable;
+}
+
+extern void setDebugCharPosition(uint16_t line, uint16_t character) 
+{
+	if( debugging )
+	{
+		debugTable->currentPosition.line = line;
+		debugTable->currentPosition.character = character;
+		debugSanityCheck();
+	}
+};
+
+bool debugSanityCheck()
+{
+	for( int i=0; i<32; i++ )
+	{
+		if( sDebugTable[i] != NULL )
+		{
+			// table length suspiciously large
+			if( debugTableLength( sDebugTable[i] ) > 4000 )
+				return false;
+
+			// table length negative!
+			if( debugTableLength( sDebugTable[i] ) < 0 )
+				return false;
+
+			// size is unexpected
+			if( sDebugTable[i]->size % 128 != 0 )
+				return false;
+			
+			// weird line ##
+			if( sDebugTable[i]->currentPosition.line > 1200 )
+				return false;
+
+			// weird char ##
+			if( sDebugTable[i]->currentPosition.character > 400 )
+				return false;
+				
+			// weird line ##
+			if( sDebugTable[i]->ptr->line > 800 )
+				return false;
+			
+			// weird char ##
+			if( sDebugTable[i]->ptr->character > 200 )
+				return false;
+		}
+	}
+	// unmatched
+	//if( debugStackPosition != -1 && sDebugTable[debugStackPosition] != debugTable )
+	//return false;
 }

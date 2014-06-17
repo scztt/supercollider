@@ -105,6 +105,7 @@ extern int parseFailed;
 extern bool compilingCmdLine;
 extern bool compilingCmdLineErrorWindow;
 extern bool compiledOK;
+extern bool debugMode;
 
 #define MAXYYLEN 8192
 

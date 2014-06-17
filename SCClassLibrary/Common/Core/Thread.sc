@@ -8,14 +8,18 @@
 // behave like a Stream. Thread itself is not used like a Stream.
 
 Thread : Stream {
-	var <state=0, func, stack, method, block, frame, ip=0, sp=0;
+	var <state=0, func, stack, <method, block, frame, ip=0, sp=0;
 	var numpop=0, receiver, numArgsPushed=0;
 	var <parent, terminalValue;
 	var <primitiveError=0, <primitiveIndex=0, randData=0;
 	var <beats=0.0, <seconds=0.0, <clock, <nextBeat, <>endBeat, <>endValue;
 	var environment;
+	var <line, <character;
+	var <>debugging;
 	var <>exceptionHandler, >threadPlayer;
 	var <executingPath, <oldExecutingPath;
+	var stackSize;
+	var dContinue;
 
 	*new { arg func, stackSize = (512);
 		^super.new.init(func, stackSize)
@@ -78,6 +82,21 @@ Thread : Stream {
 	storeOn { arg stream; stream << "nil"; }
 	archiveAsCompileString { ^true }
 	checkCanArchive { "cannot archive Threads".warn }
+	
+	setDebugging {
+		_Thread_SetDebugging
+		^this.primitiveFailed;
+	}
+	
+	getDebugging {
+		_Thread_GetDebugging
+		^this.primitiveFailed;
+	}
+	
+	getBackTrace {
+		_Thread_GetBackTrace
+		^this.primitiveFailed;
+	}
 }
 
 Routine : Thread {

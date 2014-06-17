@@ -36,9 +36,12 @@ Class {
 		// sometimes you need a class to be inited before another class
 		// start the process: Class.initClassTree(Object)
 		if(classesInited.isNil, { classesInited = IdentitySet.new });
-		if(classesInited.includes(aClass).not, {
-			if(aClass.isMetaClass.not and: { aClass.class.findMethod(\initClass).notNil }, {
-					aClass.initClass;
+		if(classesInited.includes(aClass).not, {					if(aClass.isMetaClass.not and: { aClass.class.findMethod(\initClass).notNil }, {
+				aClass.initClass;
+			},{
+				aClass.isMetaClass.not;
+				aClass.class.findMethod(\initClass).notNil;
+				aClass.methods.collect( _.name );
 			});
 
 			classesInited.add(aClass);
@@ -394,7 +397,7 @@ Process {
 
 FunctionDef {
 	var raw1, raw2, <code, <selectors, <constants, <prototypeFrame, <context, <argNames, <varNames;
-	var <sourceCode;
+	var <sourceCode, <debugTable;
 
 	// a FunctionDef is defined by a code within curly braces {}
 	// When you use a FunctionDef in your code it gets pushed on the stack
@@ -514,7 +517,7 @@ Frame {
 }
 
 DebugFrame {
-	var <functionDef, <args, <vars, <caller, <context, <address;
+	var <functionDef, <args, <vars, <caller, <context, <address, <line, <character;
 	// Object.getBackTrace returns one of these.
 	// 'functionDef' is the FunctionDef for this function or method.
 	// 'args' the values of the arguments to the function call.
@@ -580,11 +583,25 @@ Interpreter {
 		^this.compile(string).valueArray(args).postln;
 	}
 	compile { arg string;
-		_CompileExpression
+		var funcString, selectionStart, docIdentifier, function;
+		function = this.prCompile( string );
+		Document.current.notNil.if({
+			funcString = cmdLine;
+			selectionStart = Document.current.selectionStart;
+			docIdentifier = ( \name: Document.current.name, \path: Document.current.path );
+			"funcString: %\n".postf( funcString );
+			"selectionStart: %\n".postf( selectionStart );
+			"docIdentifier: %\n".postf( docIdentifier );
+		});
+		^function
+	}
+	
+	prCompile {
 		// compiles string and returns a Function.
 		// the string must be a valid expression.
 		// You cannot compile a class definition this way.
 		// This method is not implemented in SCPlay.
+		_CompileExpression
 		^nil
 	}
 

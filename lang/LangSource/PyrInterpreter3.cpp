@@ -93,8 +93,8 @@ unsigned char* dumpOneByteCode(PyrBlock *theBlock, PyrClass* theClass, unsigned 
 void dumpSlotOneWord(const char *tagstr, PyrSlot *slot);
 //bool checkAllObjChecksum(PyrObject* obj);
 
-bool gTraceInterpreter = false;
-//bool gTraceInterpreter = true;
+//bool gTraceInterpreter = false;
+bool gTraceInterpreter = true;
 
 
 const char* byteCodeString(int code);
@@ -120,19 +120,19 @@ SC_DLLEXPORT_C void runInterpreter(VMGlobals *g, PyrSymbol *selector, int numArg
 
 	if (initInterpreter(g, selector, numArgsPushed)) {
 #ifdef GC_SANITYCHECK
-		g->gc->SanityCheck();
+	g->gc->SanityCheck();
 #endif
 //        if (strcmp(selector->name, "tick") != 0) post("%s %d  execMethod %d\n", selector->name, numArgsPushed, g->execMethod);
 	//post("->Interpret thread %p\n", g->thread);
 		if (g->execMethod) Interpret(g);
 	//post("<-Interpret thread %p\n", g->thread);
 #ifdef GC_SANITYCHECK
-		g->gc->SanityCheck();
+	g->gc->SanityCheck();
 #endif
 	}
 
-	//postfl(" >endInterpreter\n");
-	endInterpreter(g);
+        //postfl(" >endInterpreter\n");
+        endInterpreter(g);
 #ifdef GC_SANITYCHECK
 	g->gc->SanityCheck();
 #endif
@@ -156,7 +156,7 @@ int32 timeseed();
 
 PyrProcess* newPyrProcess(VMGlobals *g, PyrClass *procclassobj)
 {
-	PyrGC* gc = g->gc;
+        PyrGC* gc = g->gc;
 	PyrProcess * proc = (PyrProcess*)instantiateObject(gc, procclassobj, 0, true, false);
 
 	PyrObject *sysSchedulerQueue = newPyrArray(gc, 4096, 0, false);
@@ -231,6 +231,8 @@ PyrProcess* newPyrProcess(VMGlobals *g, PyrClass *procclassobj)
 		SetNil(&frame->context);
 		SetPtr(&frame->ip,  0);
 		SetObject(&frame->vars[0], interpreter);
+		SetInt(&frame->line, 0);
+		SetInt(&frame->character, 0);
 
 		SetObject(&interpreter->context, frame);
 	}
@@ -371,7 +373,7 @@ static bool initAwakeMessage(VMGlobals *g)
 	g->block = NULL;
 	g->frame = NULL;
 	g->ip = NULL;
-	g->execMethod = 0;
+        g->execMethod = 0;
 
 	// set process as the receiver
 	PyrSlot *slot = g->sp - 3;
@@ -401,7 +403,7 @@ bool initInterpreter(VMGlobals *g, PyrSymbol *selector, int numArgsPushed)
 	g->block = NULL;
 	g->frame = NULL;
 	g->ip = NULL;
-	g->execMethod = 0;
+        g->execMethod = 0;
 	double elapsed = elapsedTime();
 	SetFloat(&g->thread->beats, elapsed);
 	SetFloat(&g->thread->seconds, elapsed);
@@ -862,7 +864,6 @@ HOT void Interpret(VMGlobals *g)
 #if BCSTAT
 	prevop = op1;
 #endif
-
 	op1 = ip[1];
 	++ip;
 
@@ -874,23 +875,25 @@ HOT void Interpret(VMGlobals *g)
 	prevop = op1;
 #endif
 	//printf("op1 %d\n", op1);
-	//postfl("sp %p   frame %p  caller %p  ip %p\n", sp, g->frame, g->frame->caller.uof, slotRawInt(&g->frame->caller.uof->ip));
-	//postfl("sp %p   frame %p   diff %d    caller %p\n", sp, g->frame, ((int)sp - (int)g->frame)>>3, g->frame->caller.uof);
-#if DEBUGINTERPRETER
-	if (gTraceInterpreter) {
+	//postfl("sp %08X   frame %08X  caller %08X  ip %08X\n", sp, g->frame, g->frame->caller.uof, g->frame->caller.uof->ip.ui);
+	//postfl("sp %08X   frame %08X   diff %d    caller %08X\n", sp, g->frame, ((int)sp - (int)g->frame)>>3, g->frame->caller.uof);
+	if (false && g->debugFlag && strcmp(g->method->ownerclass.s.u.oc->name.s.u.s->name, "String")==0) {
 		//DumpStack(g, sp);
 		if (FrameSanity(g->frame, "dbgint")) {
 			//Debugger();
 		}
 		//g->gc->SanityCheck();
 		//assert(g->gc->SanityCheck());
-			g->sp = sp; g->ip = ip;
-		g->gc->FullCollection();
-			sp = g->sp; ip = g->ip;
-		postfl("[%3d] %20s-%-16s  ",
-			(sp - g->gc->Stack()->slots) + 1,
-			slotRawSymbol(&slotRawClass(&g->method->ownerclass)->name)->name, slotRawSymbol(&g->method->name)->name);
-		dumpOneByteCode(g->block, NULL, ip);
+//		g->sp = sp; g->ip = ip;
+//		g->gc->FullCollection();
+//			sp = g->sp; ip = g->ip;
+//		postfl("[%3d] %20s-%-16s  ",
+//			(sp - g->gc->Stack()->slots) + 1,
+//			g->method->ownerclass.uoc->name.us->name, g->method->name.us->name);
+//		dumpOneByteCode(g->block, NULL, ip);
+//		selector = getsym("tracePoint");
+//		classobj = g->method->ownerclass.uoc->superclass.us->u.classobj;
+//		goto msg_lookup;		
 	}
 #endif
 #ifdef GC_SANITYCHECK
@@ -905,6 +908,43 @@ HOT void Interpret(VMGlobals *g)
 	}
 #endif
 
+	if( IsTrue(&g->thread->debugging) ) 
+	{
+		if( g->thread->dContinue )
+		{
+			g->thread->dContinue = false;
+		} else {
+			PyrBlock* debugBlock = g->block;
+			if( debugBlock->debugTable.uo )
+			{
+				// Follow structure of methPrimative
+				dumpOneByteCode(g->block, NULL, ip);
+
+				uint32 *line = ((PyrInt32Array*)debugBlock->debugTable.uo)->i + (2*(ip - (g->block->code.uob->b)));
+				uint32 *character = ((PyrInt32Array*)debugBlock->debugTable.uo)->i + (1+2*(ip - (g->block->code.uob->b)));
+				SetInt( &g->thread->line, (int)*line );
+				SetInt( &g->thread->character, (int)*character );
+
+				SetInt( &g->frame->line, (int)*line );
+				SetInt( &g->frame->character, (int)*character );
+				 
+				selector = getsym("break");
+				classobj = classOfSlot(sp);
+				index = classobj->classIndex.ui + selector->u.index;
+				meth = gRowTable[index];
+				
+				PyrThread *oldthread = g->thread;
+				g->sp = sp; g->ip = ip;				
+				doPrimitive(g, meth, 0 );
+				sp = g->sp; ip = g->ip;
+				oldthread->state.ui = tDebugging;
+				continue; 
+			} else {
+				sp = sp;
+			}
+		}
+	}
+				
 	switch (op1) {
 		case 0 : //	push class
 		handle_op_0:
@@ -1236,7 +1276,7 @@ HOT void Interpret(VMGlobals *g)
 		case 78 : handle_op_78: slotCopy(++sp, &slotRawObject(&g->block->constants)->slots[14]); dispatch_opcode;
 		case 79 : handle_op_79: slotCopy(++sp, &slotRawObject(&g->block->constants)->slots[15]); dispatch_opcode;
 
-		// opPushClassVar
+		//	opPushClassVar
 		case 80: handle_op_80:
 			handlePushClassVar(g, sp, ip, 0); dispatch_opcode;
 		case 81: handle_op_81:
@@ -1987,7 +2027,7 @@ HOT void Interpret(VMGlobals *g)
 			dispatch_opcode;
 
 
-		// opStoreClassVar
+		//	opStoreClassVar
 		case 144 :  case 145 :  case 146 :  case 147 :
 		case 148 :  case 149 :  case 150 :  case 151 :
 		case 152 :  case 153 :  case 154 :  case 155 :
@@ -2014,10 +2054,11 @@ HOT void Interpret(VMGlobals *g)
 			slot = sp;
 
 			goto class_lookup;
-
-		case 161 :  case 162 :  case 163 :
-		case 164 :  case 165 :  case 166 :  case 167 :
-		case 168 :  case 169 :  case 170 :  case 171 :
+		
+		// SendMsg??
+		case 161 :  case 162 :  case 163 :  
+		case 164 :  case 165 :  case 166 :  case 167 :  
+		case 168 :  case 169 :  case 170 :  case 171 :  
 		case 172 :  case 173 :  case 174 :  case 175 :
 		handle_op_161: handle_op_162: handle_op_163:
 		handle_op_164: handle_op_165: handle_op_166: handle_op_167:
@@ -2028,7 +2069,6 @@ HOT void Interpret(VMGlobals *g)
 			numArgsPushed = op1 & 15;
 			selector = slotRawSymbol(&slotRawObject(&g->block->selectors)->slots[op2]);
 			slot = sp - numArgsPushed + 1;
-
 			goto class_lookup;
 
 		case 176 : // opcTailCallReturnFromFunction
@@ -2099,7 +2139,7 @@ HOT void Interpret(VMGlobals *g)
 		// opSendSpecialUnaryArithMsg
 		case 208 :  // opNeg
 		handle_op_208:
-		if (IsFloat(sp)) {
+			if (IsFloat(sp)) {
 				SetFloat(sp, -slotRawFloat(sp));
 #if TAILCALLOPTIMIZE
 				g->tailCall = 0;
@@ -2289,7 +2329,7 @@ HOT void Interpret(VMGlobals *g)
 			dispatch_opcode;
 		case 244 : // opcReturnSelf
 		handle_op_244:
-			slotCopy(++sp, &g->receiver);
+		slotCopy(++sp, &g->receiver);
 			g->sp = sp; g->ip = ip;
 			returnFromMethod(g);
 			sp = g->sp; ip = g->ip;
@@ -2415,12 +2455,12 @@ HOT void Interpret(VMGlobals *g)
 
 			////////////////////////////////////
 
-		class_lookup:
+			class_lookup:
 			// normal class lookup
 			classobj = classOfSlot(slot);
 
 			// message sends handled here:
-		msg_lookup:
+			msg_lookup:
 			index = slotRawInt(&classobj->classIndex) + selector->u.index;
 			meth = gRowTable[index];
 
@@ -2554,12 +2594,12 @@ HOT void Interpret(VMGlobals *g)
 
 			////////////////////////////////////
 
-		key_class_lookup:
+			key_class_lookup:
 			// normal class lookup
 			classobj = classOfSlot(slot);
 
 			// message sends handled here:
-		key_msg_lookup:
+			key_msg_lookup:
 			index = slotRawInt(&classobj->classIndex) + selector->u.index;
 			meth = gRowTable[index];
 
@@ -2683,6 +2723,9 @@ HOT void Interpret(VMGlobals *g)
 #endif
 			dispatch_opcode;
 	} // switch(op1)
+
+	end:
+		continue;
 	} // end while(running)
 #ifndef SC_WIN32
 	running = true; // reset the signal

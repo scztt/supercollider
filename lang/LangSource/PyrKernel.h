@@ -86,10 +86,11 @@ struct PyrFrame : public PyrObjectHdr
 	PyrSlot context;
 	PyrSlot homeContext;
 	PyrSlot ip;
+	PyrSlot line, character;	
 	PyrSlot vars[1];
 };
 
-#define FRAMESIZE 5
+#define FRAMESIZE 7
 
 struct PyrProcess : public PyrObjectHdr
 {
@@ -102,7 +103,7 @@ struct PyrProcess : public PyrObjectHdr
 };
 
 
-enum { tInit, tStart, tReady, tRunning, tSleeping, tSuspended, tDone };
+enum { tInit, tStart, tReady, tRunning, tSleeping, tSuspended, tDone, tDebugging };
 
 struct PyrThread : public PyrObjectHdr
 {
@@ -114,11 +115,14 @@ struct PyrThread : public PyrObjectHdr
 	PyrSlot randData;
 	PyrSlot beats, seconds, clock, nextBeat, endBeat, endValue;
 	PyrSlot environment;
+	PyrSlot line, character;
+	PyrSlot debugging;
 	PyrSlot exceptionHandler;
 	PyrSlot threadPlayer;
 	PyrSlot executingPath;
 	PyrSlot oldExecutingPath;
 	PyrSlot stackSize;
+	bool dContinue;
 };
 
 #define EVALSTACKDEPTH 512
@@ -165,6 +169,7 @@ struct PyrBlock : public PyrObjectHdr
 	PyrSlot argNames;			// ***arguments to block
 	PyrSlot varNames;			// ***variables in block
 	PyrSlot sourceCode;			// source code if it is a closed function.
+	PyrSlot debugTable;			// line number <> bytecode lookup table
 };
 
 struct PyrMethod : public PyrBlock

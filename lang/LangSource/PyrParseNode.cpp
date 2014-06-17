@@ -180,6 +180,11 @@ PyrParseNode::PyrParseNode(int inClassNo)
 	mParens = 0;
 }
 
+void PyrParseNode::postDebugPosition()
+{
+	setDebugCharPosition( this->mLineno, linestarts[this->mLineno] + this->mCharno + errCharPosOffset );
+}
+
 void compileNodeList(PyrParseNode *node, bool onTailBranch)
 {
 	PyrSlot dummy;
@@ -293,6 +298,7 @@ PyrCurryArgNode* newPyrCurryArgNode()
 
 void PyrCurryArgNode::compile(PyrSlot *result)
 {
+	((PyrParseNode*)this)->postDebugPosition();
 	if (gPartiallyAppliedFunction) {
 		compileOpcode(opPushTempZeroVar, mArgNum);
 	} else {
@@ -311,6 +317,7 @@ PyrSlotNode* newPyrSlotNode(PyrSlot *slot)
 
 void PyrSlotNode::compile(PyrSlot *result)
 {
+	((PyrParseNode*)this)->postDebugPosition();
 	if (mClassno == pn_LiteralNode)
 		compileLiteral(result);
 	else if (mClassno == pn_PushLitNode)
@@ -338,14 +345,15 @@ PyrClassExtNode* newPyrClassExtNode(PyrSlotNode* className, PyrMethodNode* metho
 
 void PyrClassExtNode::compile(PyrSlot *result)
 {
+	//((PyrParseNode*)this)->postDebugPosition();
 	PyrClass *classobj = slotRawSymbol(&mClassName->mSlot)->u.classobj;
 	if (!classobj) {
-		char extPath[1024];
-		asRelativePath(gCompilingFileSym->name, extPath);
+        char extPath[1024];
+        asRelativePath(gCompilingFileSym->name, extPath);
 		error("Class extension for nonexistent class '%s'\n     In file:'%s'\n",
 			slotRawSymbol(&mClassName->mSlot)->name,
-			extPath
-		);
+            extPath
+        );
 		return;
 	}
 	gCurrentClass = classobj;
@@ -800,6 +808,8 @@ void PyrClassNode::compile(PyrSlot *result)
 	bool shouldRecompileSubclasses = false;
 	int indexType;
 
+	((PyrParseNode*)this)->postDebugPosition();
+
 	// find num instvars in superclass
 	//postfl("class '%s'\n", slotRawSymbol(&mClassName->mSlot)->name);
 	superclassobj = getNodeSuperclass(this);
@@ -1197,7 +1207,7 @@ void installByteCodes(PyrBlock *block)
 			byteArray = newPyrInt8Array(compileGC(), length, flags, false);
 			copyByteCodes(byteArray->b, byteCodes);
 			byteArray->size = length;
-			freeByteCodes(byteCodes);
+			//postDebugPosition(byteCodes);
 			SetObject(&block->code, byteArray);
 		} else {
 			error("installByteCodes: zero length byte codes\n");
@@ -1218,6 +1228,7 @@ void PyrMethodNode::compile(PyrSlot *result)
 {
 	PyrMethod *method, *oldmethod;
 	PyrMethodRaw *methraw;
+
 	int i, j, numArgs, numVars, methType, funcVarArgs, firstKeyIndex;
 	int index, numSlots, numArgNames;
 	bool hasPrimitive = false;
@@ -1273,6 +1284,19 @@ void PyrMethodNode::compile(PyrSlot *result)
 	//postfl("method %p raw %p\n", method, methraw);
 	method->contextDef = o_nil;
 	method->name = mMethodName->mSlot;
+	if( strcmp( method->name.s.u.s->name, "none") == 0 )
+	{
+		method->name = mMethodName->mSlot;
+		//ptable = debugTable;
+		//ptableposition = debugTable->positions;
+	};
+	
+	// DEBUGGER
+	if( debugMode )
+	{
+		debugTablePush();
+	};
+
 	if (gCompilingFileSym) SetSymbol(&method->filenameSym, gCompilingFileSym);
 	SetInt(&method->charPos, linestarts[mMethodName->mLineno] + errCharPosOffset);
 	if (mPrimitiveName) {
@@ -1641,6 +1665,27 @@ void PyrMethodNode::compile(PyrSlot *result)
 		addMethod(gCompilingClass, method);
 	}
 
+	// DEBUGGER
+	if( debugMode )
+	{
+		DebugTable table = debugTablePop();
+		
+		int tableSize = debugTableLength( table );
+		
+		// Combine line numbers and character numbers in one array, so double the size.
+		PyrInt32Array* positionTableObject = newPyrInt32Array( compileGC(), tableSize*2, 0, false);
+		for( int i=0; i<tableSize; i++ )
+		{
+			positionTableObject->i[i*2] = table->positions[i].line;
+			positionTableObject->i[i*2+1] = table->positions[i].character;
+		}
+		//memcpy( positionTableObject->i, table->positions, tableSize*sizeof(DebugPosition) );
+		positionTableObject->size = tableSize*2;
+		
+		SetObject( &method->debugTable, positionTableObject );
+		freeDebugTable(table);
+	}
+	
 	gCompilingMethod = NULL;
 	gCompilingBlock = NULL;
 	gPartiallyAppliedFunction = NULL;
@@ -1715,6 +1760,7 @@ bool PyrVarDefNode::hasExpr(PyrSlot *result)
 
 void PyrVarDefNode::compile(PyrSlot *result)
 {
+	((PyrParseNode*)this)->postDebugPosition();
 	if (hasExpr(NULL)) {
 		COMPILENODE(mDefVal, result, false);
 		compileAssignVar((PyrParseNode*)this, slotRawSymbol(&mVarName->mSlot), mDrop);
@@ -1728,18 +1774,23 @@ void PyrVarDefNode::compileArg(PyrSlot *result)
 {
 	if (hasExpr(NULL)) {
 		ByteCodes trueByteCodes;
-
+		DebugTable trueDebugTable;
+		
 		compilePushVar((PyrParseNode*)this, slotRawSymbol(&mVarName->mSlot));
 
 		mDrop = false;
+		
+		debugTablePush();
 		trueByteCodes = compileBodyWithGoto(this, 0, true);
+		trueDebugTable = debugTablePop();
+		
 		int jumplen = byteCodeLength(trueByteCodes);
 
 		compileByte(143); // special opcodes
 		compileByte(26);
 		compileByte((jumplen >> 8) & 0xFF);
 		compileByte(jumplen & 0xFF);
-		compileAndFreeByteCodes(trueByteCodes);
+		compileAndFreeByteCodes(trueByteCodes, trueDebugTable);
 		compileOpcode(opSpecialOpcode, opcDrop); // drop the boolean
 	}
 
@@ -1878,12 +1929,12 @@ void PyrCallNodeBase::compilePartialApplication(int numCurryArgs, PyrSlot *resul
 
 void PyrCallNodeBase::compile(PyrSlot *result)
 {
-
+	((PyrParseNode*)this)->postDebugPosition();	 // after here
 	int numCurryArgs = isPartialApplication();
 	if (numCurryArgs) {
 		compilePartialApplication(numCurryArgs, result);
 	} else {
-		compileCall(result);
+		compileCall(result);	// before here
 	}
 }
 
@@ -2215,7 +2266,7 @@ ByteCodes compileBodyWithGoto(PyrParseNode* body, int branchLen, bool onTailBran
 	gPartiallyAppliedFunction = NULL;
 
 	currentByteCodes = saveByteCodeArray();
-
+	
 	COMPILENODE(body, &dummy, onTailBranch);
 	if (branchLen) {
 		if (!byteCodeLength(gCompilingByteCodes)) {
@@ -2260,8 +2311,8 @@ bool isAnInlineableBlock(PyrParseNode *node)
 				&& (bnode = (PyrBlockNode*)(slotRawPtr(&anode->mSlot)))->mClassno == pn_BlockNode) {
 			if (bnode->mArglist || bnode->mVarlist) {
 				if (gPostInlineWarnings) {
-					post("WARNING: FunctionDef contains variable declarations and so"
-					" will not be inlined.\n");
+				post("WARNING: FunctionDef contains variable declarations and so"
+				" will not be inlined.\n");
 					if (bnode->mArglist)
 						nodePostErrorLine((PyrParseNode*)bnode->mArglist);
 					else
@@ -2269,8 +2320,8 @@ bool isAnInlineableBlock(PyrParseNode *node)
 				}
 			} else
 				res = true;
+			}
 		}
-	}
 	return res;
 }
 
@@ -2285,8 +2336,8 @@ bool isAnInlineableAtomicLiteralBlock(PyrParseNode *node)
 				&& (bnode = (PyrBlockNode*)(slotRawPtr(&anode->mSlot)))->mClassno == pn_BlockNode) {
 			if (bnode->mArglist || bnode->mVarlist) {
 				if (gPostInlineWarnings) {
-					post("WARNING: FunctionDef contains variable declarations and so"
-					" will not be inlined.\n");
+				post("WARNING: FunctionDef contains variable declarations and so"
+				" will not be inlined.\n");
 					if (bnode->mArglist)
 						nodePostErrorLine((PyrParseNode*)bnode->mArglist);
 					else
@@ -2347,13 +2398,16 @@ void compileAndMsg(PyrParseNode* arg1, PyrParseNode* arg2)
 {
 	PyrSlot dummy;
 	ByteCodes trueByteCodes;
+	DebugTable trueDebugTable;
 
 	COMPILENODE(arg1, &dummy, false);
 	if (isAnInlineableBlock(arg2)) {
+		debugTablePush();
 		trueByteCodes = compileSubExpression((PyrPushLitNode*)arg2, true);
+		trueDebugTable = debugTablePop();
 
 		compileJump(opcJumpIfFalsePushFalse, byteCodeLength(trueByteCodes));
-		compileAndFreeByteCodes(trueByteCodes);
+		compileAndFreeByteCodes(trueByteCodes, trueDebugTable);
 	} else {
 		COMPILENODE(arg2, &dummy, false);
 		compileTail();
@@ -2366,13 +2420,16 @@ void compileOrMsg(PyrParseNode* arg1, PyrParseNode* arg2)
 {
 	PyrSlot dummy;
 	ByteCodes falseByteCodes;
+	DebugTable falseDebugTable;
 
 	COMPILENODE(arg1, &dummy, false);
 	if (isAnInlineableBlock(arg2)) {
+		debugTablePush();
 		falseByteCodes = compileSubExpression((PyrPushLitNode*)arg2, true);
+		falseDebugTable = debugTablePop();
 
 		compileJump(opcJumpIfTruePushTrue, byteCodeLength(falseByteCodes));
-		compileAndFreeByteCodes(falseByteCodes);
+		compileAndFreeByteCodes(falseByteCodes, falseDebugTable);
 	} else {
 		COMPILENODE(arg2, &dummy, false);
 		compileTail();
@@ -2400,14 +2457,18 @@ void compileQQMsg(PyrParseNode* arg1, PyrParseNode* arg2)
 	COMPILENODE(arg1, &dummy, false);
 	if (isAnInlineableBlock(arg2)) {
 		ByteCodes nilByteCodes;
-		nilByteCodes = compileSubExpression((PyrPushLitNode*)arg2, true);
+		DebugTable nilDebugTable;
 
+		debugTablePush();
+		nilByteCodes = compileSubExpression((PyrPushLitNode*)arg2, true);
+		nilDebugTable = debugTablePop();
+		
 		int jumplen = byteCodeLength(nilByteCodes);
 		compileByte(143); // special opcodes
 		compileByte(23); // ??
 		compileByte((jumplen >> 8) & 0xFF);
 		compileByte(jumplen & 0xFF);
-		compileAndFreeByteCodes(nilByteCodes);
+		compileAndFreeByteCodes(nilByteCodes, nilDebugTable);
 	} else {
 		COMPILENODE(arg2, &dummy, false);
 		compileTail();
@@ -2424,14 +2485,18 @@ void compileXQMsg(PyrParseNode* arg1, PyrParseNode* arg2)
 	COMPILENODE(arg1, &dummy, false);
 	if (isAnInlineableBlock(arg2)) {
 		ByteCodes nilByteCodes;
+		DebugTable nilDebugTable;
+		
+		debugTablePush();
 		nilByteCodes = compileSubExpression((PyrPushLitNode*)arg2, true);
-
+		nilDebugTable = debugTablePop();
+		
 		int jumplen = byteCodeLength(nilByteCodes);
 		compileByte(143); // special opcodes
 		compileByte(27); // !?
 		compileByte((jumplen >> 8) & 0xFF);
 		compileByte(jumplen & 0xFF);
-		compileAndFreeByteCodes(nilByteCodes);
+		compileAndFreeByteCodes(nilByteCodes, nilDebugTable);
 	} else {
 		COMPILENODE(arg2, &dummy, false);
 		compileTail();
@@ -2465,6 +2530,7 @@ void compileIfMsg(PyrCallNodeBase2* node)
 {
 	PyrSlot dummy;
 	ByteCodes trueByteCodes, falseByteCodes;
+	DebugTable trueTable, falseTable;
 
 	int numArgs = nodeListLength(node->mArglist);
 	PyrParseNode* arg1 = node->mArglist;
@@ -2476,10 +2542,13 @@ void compileIfMsg(PyrCallNodeBase2* node)
 		if (isAnInlineableBlock(arg2)) {
 			COMPILENODE(arg1, &dummy, false);
 
+			debugTablePush();
 			trueByteCodes = compileSubExpression((PyrPushLitNode*)arg2, true);
+			trueTable = debugTablePop(); 
+			
 			if (byteCodeLength(trueByteCodes)) {
 				compileJump(opcJumpIfFalsePushNil, byteCodeLength(trueByteCodes));
-				compileAndFreeByteCodes(trueByteCodes);
+				compileAndFreeByteCodes(trueByteCodes, trueTable);
 			} else {
 				compileOpcode(opSpecialOpcode, opcDrop); // drop the boolean
 				compileOpcode(opPushSpecialValue, opsvNil); // push nil
@@ -2490,15 +2559,22 @@ void compileIfMsg(PyrCallNodeBase2* node)
 		arg3 = arg2->mNext;
 		if (isAnInlineableBlock(arg2) && isAnInlineableBlock(arg3)) {
 			COMPILENODE(arg1, &dummy, false);
+			
+			debugTablePush();
 			falseByteCodes = compileSubExpression((PyrPushLitNode*)arg3, true);
+			falseTable = debugTablePop();
+			
+			debugTablePush();
 			trueByteCodes = compileSubExpressionWithGoto((PyrPushLitNode*)arg2, byteCodeLength(falseByteCodes), true);
+			trueTable = debugTablePop();
+			
 			if (byteCodeLength(falseByteCodes)) {
 				compileJump(opcJumpIfFalse, byteCodeLength(trueByteCodes));
-				compileAndFreeByteCodes(trueByteCodes);
-				compileAndFreeByteCodes(falseByteCodes);
+				compileAndFreeByteCodes(trueByteCodes, trueTable);
+				compileAndFreeByteCodes(falseByteCodes, falseTable);
 			} else if (byteCodeLength(trueByteCodes)) {
 				compileJump(opcJumpIfFalsePushNil, byteCodeLength(trueByteCodes));
-				compileAndFreeByteCodes(trueByteCodes);
+				compileAndFreeByteCodes(trueByteCodes, trueTable);
 			} else {
 				compileOpcode(opSpecialOpcode, opcDrop); // drop the boolean
 				compileOpcode(opPushSpecialValue, opsvNil); // push nil
@@ -2520,6 +2596,7 @@ void compileIfNilMsg(PyrCallNodeBase2* node, bool flag)
 	PyrSlot dummy;
 	ByteCodes trueByteCodes, falseByteCodes;
 	PyrParseNode *arg2, *arg3;
+	DebugTable trueDebugTable, falseDebugTable;
 
 	int numArgs = nodeListLength(node->mArglist);
 	PyrParseNode* arg1 = node->mArglist;
@@ -2535,14 +2612,16 @@ void compileIfNilMsg(PyrCallNodeBase2* node, bool flag)
 			PyrCallNode* callNode = (PyrCallNode*)arg1;
 			COMPILENODE(callNode->mArglist, &dummy, false);
 
+			debugTablePush();
 			trueByteCodes = compileSubExpression((PyrPushLitNode*)arg2, true);
+			trueDebugTable = debugTablePop();
 			int jumplen = byteCodeLength(trueByteCodes);
 			if (jumplen) {
 				compileByte(143); // special opcodes
 				compileByte(flag ? 26 : 27);
 				compileByte((jumplen >> 8) & 0xFF);
 				compileByte(jumplen & 0xFF);
-				compileAndFreeByteCodes(trueByteCodes);
+				compileAndFreeByteCodes(trueByteCodes, trueDebugTable);
 			} else {
 				compileOpcode(opSpecialOpcode, opcDrop); // drop the value
 				compileOpcode(opPushSpecialValue, opsvNil); // push nil
@@ -2561,23 +2640,29 @@ void compileIfNilMsg(PyrCallNodeBase2* node, bool flag)
 			PyrCallNode* callNode = (PyrCallNode*)arg1;
 			COMPILENODE(callNode->mArglist, &dummy, false);
 
+			debugTablePush();
 			falseByteCodes = compileSubExpression((PyrPushLitNode*)arg3, true);
 			int falseLen = byteCodeLength(falseByteCodes);
+			falseDebugTable = debugTablePop();			
+			
+			debugTablePush();
 			trueByteCodes = compileSubExpressionWithGoto((PyrPushLitNode*)arg2, falseLen, true);
+			trueDebugTable = debugTablePop();
+			
 			int trueLen = byteCodeLength(trueByteCodes);
 			if (falseLen) {
 				compileByte(143); // special opcodes
 				compileByte(flag ? 24 : 25);
 				compileByte((trueLen >> 8) & 0xFF);
 				compileByte(trueLen & 0xFF);
-				compileAndFreeByteCodes(trueByteCodes);
-				compileAndFreeByteCodes(falseByteCodes);
+				compileAndFreeByteCodes(trueByteCodes, trueDebugTable);
+				compileAndFreeByteCodes(falseByteCodes, falseDebugTable);
 			} else if (trueLen) {
 				compileByte(143); // special opcodes
 				compileByte(flag ? 26 : 27);
 				compileByte((trueLen >> 8) & 0xFF);
 				compileByte(trueLen & 0xFF);
-				compileAndFreeByteCodes(trueByteCodes);
+				compileAndFreeByteCodes(trueByteCodes, trueDebugTable);
 			} else {
 				compileOpcode(opSpecialOpcode, opcDrop); // drop the boolean
 				compileOpcode(opPushSpecialValue, opsvNil); // push nil
@@ -2776,7 +2861,9 @@ void compileSwitchMsg(PyrCallNode* node)
 		for (; argnode; argnode = nextargnode) {
 			nextargnode = argnode->mNext;
 			if (nextargnode != NULL) {
+				debugTablePush();
 				ByteCodes byteCodes = compileSubExpressionWithGoto((PyrPushLitNode*)nextargnode, 0x6666, true);
+				DebugTable debugTable = debugTablePop();
 
 				PyrSlot *key;
 				PyrSlot value;
@@ -2798,7 +2885,7 @@ void compileSwitchMsg(PyrCallNode* node)
 
 				if (byteCodes) {
 					offset += byteCodeLength(byteCodes);
-					compileAndFreeByteCodes(byteCodes);
+					compileAndFreeByteCodes(byteCodes, debugTable);
 				} else {
 					compileOpcode(opPushSpecialValue, opsvNil);
 					offset += 1;
@@ -2811,12 +2898,14 @@ void compileSwitchMsg(PyrCallNode* node)
 					offset += 1;
 				}
 			} else {
+				debugTablePush();
 				ByteCodes byteCodes = compileSubExpressionWithGoto((PyrPushLitNode*)argnode, 0, true);
+				DebugTable debugTable = debugTablePop();
 
 				lastOffset = offset;
 				if (byteCodes) {
 					offset += byteCodeLength(byteCodes);
-					compileAndFreeByteCodes(byteCodes);
+					compileAndFreeByteCodes(byteCodes, debugTable);
 				} else {
 					compileOpcode(opPushSpecialValue, opsvNil);
 					lastOffset = offset;
@@ -2865,15 +2954,17 @@ void compileWhileMsg(PyrCallNodeBase2* node)
 	PyrParseNode *argnode;
 	PyrSlot dummy;
 	ByteCodes whileByteCodes, exprByteCodes;
+	DebugTable whileDebugTable, exprDebugTable;
 	int whileByteCodeLen, exprByteCodeLen;
 
 	numArgs = nodeListLength(node->mArglist);
 	if (numArgs == 1 && isAnInlineableBlock(node->mArglist)) {
-
+		debugTablePush();
 		whileByteCodes = compileSubExpression((PyrPushLitNode*)node->mArglist, false);
+		whileDebugTable = debugTablePop();
 
 		whileByteCodeLen = byteCodeLength(whileByteCodes);
-		compileAndFreeByteCodes(whileByteCodes);
+		compileAndFreeByteCodes(whileByteCodes, whileDebugTable);
 
 		exprByteCodeLen = 1;
 		compileJump(opcJumpIfFalsePushNil, exprByteCodeLen + 3);
@@ -2886,26 +2977,33 @@ void compileWhileMsg(PyrCallNodeBase2* node)
 	} else if (numArgs == 2 && isWhileTrue(node->mArglist)
 		&& isAnInlineableBlock(node->mArglist->mNext)) {
 
+		debugTablePush();
 		exprByteCodes = compileSubExpression((PyrPushLitNode*)node->mArglist->mNext, false);
+		exprDebugTable = debugTablePop();
 
 		exprByteCodeLen = byteCodeLength(exprByteCodes);
-		compileAndFreeByteCodes(exprByteCodes);
+		compileAndFreeByteCodes(exprByteCodes, exprDebugTable);
 
 		compileJump(opcJumpBak, exprByteCodeLen + 1);
 
 	} else if (numArgs == 2 && isAnInlineableBlock(node->mArglist)
 		&& isAnInlineableBlock(node->mArglist->mNext)) {
 
+		debugTablePush();
 		whileByteCodes = compileSubExpression((PyrPushLitNode*)node->mArglist, false);
+		whileDebugTable = debugTablePop();
+		
+		debugTablePush();
 		exprByteCodes = compileSubExpression((PyrPushLitNode*)node->mArglist->mNext, false);
+		exprDebugTable = debugTablePop();
 
 		whileByteCodeLen = byteCodeLength(whileByteCodes);
-		compileAndFreeByteCodes(whileByteCodes);
+		compileAndFreeByteCodes(whileByteCodes, whileDebugTable);
 
 		if (exprByteCodes) {
-			exprByteCodeLen = byteCodeLength(exprByteCodes);
-			compileJump(opcJumpIfFalsePushNil, exprByteCodeLen + 3);
-			compileAndFreeByteCodes(exprByteCodes);
+		exprByteCodeLen = byteCodeLength(exprByteCodes);
+		compileJump(opcJumpIfFalsePushNil, exprByteCodeLen + 3);
+			compileAndFreeByteCodes(exprByteCodes, exprDebugTable);
 		} else {
 			exprByteCodeLen = 1;
 			compileJump(opcJumpIfFalsePushNil, exprByteCodeLen + 3);
@@ -2932,15 +3030,18 @@ void compileLoopMsg(PyrCallNodeBase2* node)
 	PyrParseNode *argnode;
 	PyrSlot dummy;
 	ByteCodes exprByteCodes;
+	DebugTable exprDebugTable;
 	int exprByteCodeLen;
 
 	numArgs = nodeListLength(node->mArglist);
 	if (numArgs == 1 && isAnInlineableBlock(node->mArglist)) {
 
+		debugTablePush();
 		exprByteCodes = compileSubExpression((PyrPushLitNode*)node->mArglist, false);
-
+		exprDebugTable = debugTablePop();
+		
 		exprByteCodeLen = byteCodeLength(exprByteCodes);
-		compileAndFreeByteCodes(exprByteCodes);
+		compileAndFreeByteCodes(exprByteCodes, exprDebugTable);
 
 		compileJump(opcJumpBak, exprByteCodeLen + 1);
 
@@ -3108,6 +3209,8 @@ void PyrPushKeyArgNode::compile(PyrSlot *result)
 	PyrSlot dummy;
 	//postfl("->compilePyrPushKeyArgNode\n");
 
+	((PyrParseNode*)this)->postDebugPosition();
+	
 	compilePushConstant((PyrParseNode*)this, &mSelector->mSlot);
 
 	COMPILENODE(mExpr, &dummy, false);
@@ -3126,6 +3229,9 @@ void PyrDropNode::compile(PyrSlot *result)
 	//postfl("->compilePyrDropNode\n");
 	PyrSlot dummy;
 	// eliminate as many drops as possible
+
+	((PyrParseNode*)this)->postDebugPosition();
+	
 	if (!mExpr2) {
 		post("DROP EXPR2 NULL\n");
 		COMPILENODE(mExpr1, &dummy, true);
@@ -3147,17 +3253,17 @@ void PyrDropNode::compile(PyrSlot *result)
 		}
 		if (znode->mExpr2->mClassno == pn_AssignNode) {
 			((PyrAssignNode*)znode->mExpr2)->mDrop = 1;
-			COMPILENODE(mExpr1, &dummy, false);
-			COMPILENODE(mExpr2, &dummy, true);
+			COMPILENODE(mExpr1, &dummy, false);		
+			COMPILENODE(mExpr2, &dummy, true);		// in here
 		} else {
 			COMPILENODE(mExpr1, &dummy, false);
 			compileOpcode(opSpecialOpcode, opcDrop);
 			COMPILENODE(mExpr2, &dummy, true);
 		}
 	} else {
-		COMPILENODE(mExpr1, &dummy, false);
-		compileOpcode(opSpecialOpcode, opcDrop);
-		COMPILENODE(mExpr2, &dummy, true);
+		COMPILENODE(mExpr1, &dummy, false); // after here
+		compileOpcode(opSpecialOpcode, opcDrop); // after here
+		COMPILENODE(mExpr2, &dummy, true); // after here
 	}
 	//postfl("<-compilePyrDropNode\n");
 }
@@ -3237,6 +3343,7 @@ void PyrSlotNode::compilePushLit(PyrSlot *result)
 	PyrSlot slot;
 	ByteCodes savedBytes;
 
+	((PyrParseNode*)this)->postDebugPosition();
 	//postfl("compilePyrPushLitNode\n");
 	if (IsPtr(&mSlot)) {
 		PyrParseNode *literalObj = (PyrParseNode*)slotRawPtr(&mSlot);
@@ -3314,7 +3421,7 @@ void compilePyrLiteralNode(PyrLiteralNode *node, PyrSlot *result)
 void PyrSlotNode::compileLiteral(PyrSlot *result)
 {
 	ByteCodes savedBytes;
-
+	((PyrParseNode*)this)->postDebugPosition();
 	if (IsPtr(&mSlot)) {
 		PyrParseNode* literalObj = (PyrParseNode*)slotRawPtr(&mSlot);
 		if (literalObj->mClassno == pn_BlockNode) {
@@ -3348,6 +3455,7 @@ void PyrReturnNode::compile(PyrSlot *result)
 	PyrPushLitNode *lit;
 	PyrSlot dummy;
 
+	((PyrParseNode*)this)->postDebugPosition(); // before here
 	//post("->compilePyrReturnNode\n");
 	gFunctionCantBeClosed = true;
 	if (!mExpr) {
@@ -3369,7 +3477,7 @@ void PyrReturnNode::compile(PyrSlot *result)
 	} else {
 		SetTailBranch branch(true);
 		SetTailIsMethodReturn mr(true);
-		COMPILENODE(mExpr, &dummy, true);
+		COMPILENODE(mExpr, &dummy, true);		// before here!
 		compileOpcode(opSpecialOpcode, opcReturn);
 	}
 	//post("<-compilePyrReturnNode\n");
@@ -3383,7 +3491,8 @@ PyrBlockReturnNode* newPyrBlockReturnNode()
 
 
 void PyrBlockReturnNode::compile(PyrSlot *result)
-{
+{	
+	((PyrParseNode*)this)->postDebugPosition();
 	//postfl("compilePyrBlockReturnNode\n");
 	//compileOpcode(opSpecialOpcode, opcFunctionReturn);
 }
@@ -3515,6 +3624,7 @@ void compileAssignVar(PyrParseNode* node, PyrSymbol* varName, bool drop)
 void PyrAssignNode::compile(PyrSlot* result)
 {
 	PyrSlot dummy;
+	((PyrParseNode*)this)->postDebugPosition();
 
 	//postfl("compilePyrAssignNode\n");
 	COMPILENODE(mExpr, &dummy, false);
@@ -3542,7 +3652,7 @@ void PyrSetterNode::compileCall(PyrSlot* result)
 	PyrSlot dummy;
 	char setterName[128];
 	PyrSymbol *setterSym;
-
+	((PyrParseNode*)this)->postDebugPosition();
 	//postfl("compilePyrSetterNode\n");
 	if (nodeListLength(mExpr1) > 1) {
 		error("Setter method called with too many arguments.\n");
@@ -3577,6 +3687,7 @@ void PyrSetterNode::compileCall(PyrSlot* result)
 void PyrMultiAssignNode::compile(PyrSlot* result)
 {
 	PyrSlot dummy;
+	((PyrParseNode*)this)->postDebugPosition();
 
 	//postfl("compilePyrMultiAssignNode\n");
 	COMPILENODE(mExpr, &dummy, false);
@@ -3588,6 +3699,8 @@ void PyrMultiAssignVarListNode::compile(PyrSlot* result)
 	int i, numAssigns;
 	PyrSlotNode *varname;
 
+	((PyrParseNode*)this)->postDebugPosition();
+	
 	//postfl("compilePyrMultiAssignVarListNode\n");
 	numAssigns = nodeListLength((PyrParseNode*)mVarNames);
 	varname = mVarNames;
@@ -3870,12 +3983,21 @@ void PyrBlockNode::compile(PyrSlot* slotResult)
 	PyrSlot dummy;
 	bool hasVarExprs = false;
 
+	((PyrParseNode*)this)->postDebugPosition();
+	
 	//postfl("->block\n");
 
 	// create a new block object
 
 	flags = compilingCmdLine ? obj_immutable : obj_permanent | obj_immutable;
 	block = newPyrBlock(flags);
+
+	// DEBUGGER
+	if( debugMode )
+	{
+		debugTablePush();
+	}
+	
 	SetObject(slotResult, block);
 
 	int prevFunctionHighestExternalRef = gFunctionHighestExternalRef;
@@ -4108,6 +4230,26 @@ void PyrBlockNode::compile(PyrSlot* slotResult)
 			//post("cf %4d %4d %6d %s:%s \n", totalStrings, stringLength, totalLength, slotRawSymbol(&gCompilingClass->name)->name, slotRawSymbol(&gCompilingMethod->name)->name);
 	}
 
+	// DEBUGGER
+	if( debugMode )
+	{
+		DebugTable table = debugTablePop();
+		int tableSize = debugTableLength( table );
+		
+		// Combine line numbers and character numbers in one array, so double the size.
+		PyrInt32Array* positionTableObject = newPyrInt32Array( compileGC(), tableSize*2, 0, false);
+		for( int i=0; i<tableSize; i++ )
+		{
+			positionTableObject->i[i*2] = table->positions[i].line;
+			positionTableObject->i[i*2+1] = table->positions[i].character;
+		}
+		//memcpy( positionTableObject->i, table->positions, tableSize*sizeof(DebugPosition) );
+		positionTableObject->size = tableSize;
+		
+		SetObject( &block->debugTable, positionTableObject );
+		freeDebugTable(table);
+	}
+	
 	gCompilingBlock = prevBlock;
 	gCompilingClass = prevClass;
 	gPartiallyAppliedFunction = prevPartiallyAppliedFunction;
@@ -4271,10 +4413,10 @@ int conjureLiteralSlotIndex(PyrParseNode *node, PyrBlock* func, PyrSlot *slot)
 		selectors = slotRawObject(&func->selectors);
 		/*if (selectors->classptr != class_array) {
 			post("compiling %s:%s\n", slotRawSymbol(&gCompilingClass->name)->name, slotRawSymbol(&gCompilingMethod->name)->name);
-			post("selectors is a '%s'\n", selectors->classptr->name.us->name);
-			dumpObjectSlot(slot);
-			Debugger();
-		}*/
+		post("selectors is a '%s'\n", selectors->classptr->name.us->name);
+		dumpObjectSlot(slot);
+		Debugger();
+	}*/
 		for (i=0; i<selectors->size; ++i)
 			if (SlotEq(&selectors->slots[i], slot))
 				return i;
@@ -4733,3 +4875,51 @@ bool findSpecialClassName(PyrSymbol *className, int *index)
 	}
 	return false;
 }
+
+void generateDebugTraceCall(PyrParseNode *traceCallNode, PyrSymbol *thisIn, int charNum )
+{
+	
+	// build symbol for "tracepoint" method
+	PyrSlot traceSymbol;
+	SetSymbol(&traceSymbol, findsym("tracepoint"));	
+	PyrSlotNode *selector = newPyrSlotNode( &traceSymbol );
+
+	// build arglist
+
+	// Debug class argument
+	PyrSlot debugSymbol;
+	SetSymbol(&debugSymbol, findsym("Debug"));
+	PyrSlotNode *debugSymbolNode = newPyrSlotNode(&debugSymbol);
+
+	// backtrace argument
+	
+	// getBacktrace method symbol
+	PyrSlot backtraceSymbol;
+	SetSymbol(&backtraceSymbol, findsym("getBacktrace"));
+	PyrSlotNode *backtraceSymbolNode = newPyrSlotNode( &backtraceSymbol );
+	
+	// get "this"
+	PyrSlot thisSym;
+	SetSymbol(&thisSym, thisIn);
+	PyrSlotNode *thisSymbolNode = newPyrSlotNode(&thisSym);
+	
+	PyrCallNode *backtraceCallNode = newPyrCallNode( backtraceSymbolNode, thisSymbolNode, NULL, NULL );
+	
+	// integer argument
+	PyrSlot charNumSlot;
+	SetInt(&charNumSlot, charNum);
+	PyrSlotNode *charNumSlotNode = newPyrSlotNode( &charNumSlot );
+	
+	// set argument order
+	PyrSlotNode *arglist = debugSymbolNode;
+//	(PyrParseNode*)arglist->mNext = backtraceCallNode;
+//	(PyrParseNode*)backtraceCallNode->mNext = charNumSlotNode;
+	arglist = (PyrSlotNode*)linkNextNode(arglist, backtraceCallNode);
+	backtraceCallNode = (PyrCallNode*)linkNextNode(backtraceCallNode, charNumSlotNode);
+	
+	// combine selector and arglist into call
+	PyrCallNode *callNode = newPyrCallNode(selector, arglist, NULL, NULL );
+	PyrDropNode *mExpr1 = newPyrDropNode( callNode, NULL );
+	traceCallNode = newPyrDropNode( mExpr1, newPyrReturnNode(NULL) );
+}
+

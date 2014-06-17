@@ -87,6 +87,7 @@ static char gCompileDir[MAXPATHLEN];
 
 //#define DEBUGLEX 1
 bool gDebugLexer = false;
+bool debugMode=false;
 
 bool gShowWarnings = false;
 LongStack brackets;
@@ -1676,7 +1677,6 @@ void traverseDepTree(ClassDependancy *classdep, int level)
 void compileClass(PyrSymbol *fileSym, int startPos, int endPos, int lineOffset)
 {
 	//fprintf(stderr, "compileClass: %d\n", fileSym->u.index);
-
 	gCompilingFileSym = fileSym;
 	gCompilingVMGlobals = 0;
 	gRootParseNode = NULL;
@@ -1689,7 +1689,20 @@ void compileClass(PyrSymbol *fileSym, int startPos, int endPos, int lineOffset)
 		if (!parseFailed && gRootParseNode) {
 			//postfl("Compiling nodes %p\n", gRootParseNode);fflush(stdout);
 			compilingCmdLine = false;
-			compileNodeList(gRootParseNode, true);
+			PyrClassNode *classNode = dynamic_cast<PyrClassNode*> (gRootParseNode);
+			if( classNode /* && !(
+				strcmp( classNode->mClassName->mSlot.s.u.s->name, "String" ) *
+				strcmp( classNode->mClassName->mSlot.s.u.s->name, "Voice" ) 
+			) */ )
+			{
+				//postfl("Debugging %s (offset %d).\n", classNode->mClassName->mSlot.s.u.s->name, linestarts[gRootParseNode->mLineno] + errCharPosOffset );
+				debugMode=true;
+				compileNodeList(gRootParseNode, true);
+				debugMode=false;
+			} else {
+				compileNodeList(gRootParseNode, true);
+			}
+			
 			//postfl("done compiling\n");fflush(stdout);
 		} else {
 			compileErrors++;

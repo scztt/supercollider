@@ -74,6 +74,9 @@ struct VMGlobals {
 	long primitiveIndex;
 	RGen *rgen;
 	jmp_buf escapeInterpreter;
+	bool debugFlag;
+	PyrSlot debugFrame;
+	int currentLine;
 
 	// scratch context
 	long execMethod;

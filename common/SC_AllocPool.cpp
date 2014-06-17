@@ -606,6 +606,18 @@ void AllocPool::DoCheckChunk(AllocChunkPtr p)
   assert(p->mSize == next->mPrevSize);
 }
 
+bool AllocPool::DoVerifyChunk(AllocChunkPtr p)
+{
+#ifndef NDEBUG
+	size_t size = p->Size();
+	//size_t maxsize = mAreaInitSize > mAreaMoreSize ? mAreaInitSize : mAreaMoreSize;
+	// assert(size < maxsize);
+	
+	AllocChunkPtr next = p->ChunkAtOffset(size);
+#endif
+	return p->mSize == next->mPrevSize;
+}
+
 
 void AllocPool::DoCheckFreeChunk(AllocChunkPtr p)
 {

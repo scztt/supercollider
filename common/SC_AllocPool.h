@@ -150,6 +150,7 @@ public:
 
 	void DoCheckPool();
 	void DoCheckInUseChunk(AllocChunkPtr p);
+	bool DoVerifyChunk(AllocChunkPtr p);
 
 	static AllocChunkPtr MemToChunk(void *inPtr)
 		{ return (AllocChunkPtr)((char*)(inPtr) - sizeof(AllocChunk)); }

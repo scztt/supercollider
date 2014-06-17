@@ -109,7 +109,7 @@ int slotStrLen(PyrSlot *slot)
 	if (isKindOfSlot(slot, class_string))
 		return slotRawObject(slot)->size;
 
-	return -1;
+        return -1;
 }
 
 int slotStrVal(PyrSlot *slot, char *str, int maxlen)
@@ -883,6 +883,8 @@ HOT int blockValue(struct VMGlobals *g, int numArgsPushed)
 	SetObject(&frame->method, block);
 	slotCopy(&frame->homeContext,&context->homeContext);
 	slotCopy(&frame->context,&closure->context);
+	SetInt(&frame->line, 0);
+	SetInt(&frame->character, 0);
 
 	if (caller) {
 		SetPtr(&caller->ip, g->ip);
@@ -1019,6 +1021,8 @@ int blockValueWithKeys(VMGlobals *g, int allArgsPushed, int numKeyArgsPushed)
 	SetObject(&frame->method, block);
 	slotCopy(&frame->homeContext,&context->homeContext);
 	slotCopy(&frame->context,&closure->context);
+	SetInt(&frame->line, 0);
+	SetInt(&frame->character, 0);
 
 	if (caller) {
 		SetPtr(&caller->ip, g->ip);
@@ -1181,6 +1185,8 @@ int blockValueEnvir(struct VMGlobals *g, int numArgsPushed)
 	SetObject(&frame->method, block);
 	slotCopy(&frame->homeContext,&context->homeContext);
 	slotCopy(&frame->context,&closure->context);
+	SetInt(&frame->line, 0);
+	SetInt(&frame->character, 0);
 
 	if (caller) {
 		SetPtr(&caller->ip, g->ip);
@@ -1331,6 +1337,8 @@ int blockValueEnvirWithKeys(VMGlobals *g, int allArgsPushed, int numKeyArgsPushe
 	SetObject(&frame->method, block);
 	slotCopy(&frame->homeContext,&context->homeContext);
 	slotCopy(&frame->context,&closure->context);
+	SetInt(&frame->line, 0);
+	SetInt(&frame->character, 0);
 
 	if (caller) {
 		SetPtr(&caller->ip, g->ip);
@@ -2018,6 +2026,39 @@ int prTraceAnyPathToAllInstancesOf(struct VMGlobals *g, int numArgsPushed)
 }
 #endif
 
+int prEnableDebug(struct VMGlobals *g, int numArgsPushed);
+int prEnableDebug(struct VMGlobals *g, int numArgsPushed)
+{
+	g->debugFlag = true;
+	return errNone;
+}
+
+int prDisableDebug(struct VMGlobals *g, int numArgsPushed);
+int prDisableDebug(struct VMGlobals *g, int numArgsPushed)
+{
+	g->debugFlag = false;
+	return errNone;
+}
+
+int prGetLastDebugFrame(struct VMGlobals *g, int numArgsPushed);
+int prGetLastDebugFrame(struct VMGlobals *g, int numArgsPushed)
+{
+	PyrSlot *a;
+	
+	a = g->sp;
+//	MakeDebugFrame(g, g->frame, a);
+	
+	return errNone;
+}
+
+int prGetCurrentLine(struct VMGlobals *g, int numArgsPushed);
+int prGetCurrentLine(struct VMGlobals *g, int numArgsPushed)
+{
+	PyrSlot *a = g->sp;
+	SetInt(a, g->currentLine);
+	return errNone;
+}
+
 extern PyrClass *gClassList;
 
 int prAllClasses(struct VMGlobals *g, int numArgsPushed)
@@ -2069,7 +2110,7 @@ struct DebugFrameConstructor
 
 private:
 	void run_queue(VMGlobals *g)
-	{
+{
 		while (!workQueue.empty()) {
 			WorkQueueItem work = workQueue.back();
 			workQueue.pop_back();
@@ -2082,48 +2123,57 @@ private:
 		PyrMethod *meth = slotRawMethod(&frame->method);
 		PyrMethodRaw * methraw = METHRAW(meth);
 
-		PyrObject* debugFrameObj = instantiateObject(g->gc, getsym("DebugFrame")->u.classobj, 0, false, true);
-		SetObject(outSlot, debugFrameObj);
+	/*
+		DebugFrame {
+			var <functionDef, <args, <vars, <caller, <context, <address, <line, <character;
+		}
+	*/
+	
+	PyrObject* debugFrameObj = instantiateObject(g->gc, getsym("DebugFrame")->u.classobj, 0, false, true);
+	SetObject(outSlot, debugFrameObj);
 
-		SetObject(debugFrameObj->slots + 0, meth);
-		SetPtr(debugFrameObj->slots + 5, meth);
+	SetObject(debugFrameObj->slots + 0, meth);
+	SetPtr(debugFrameObj->slots + 5, meth);
 
-		int numargs = methraw->numargs;
-		int numvars = methraw->numvars;
-		if (numargs) {
-			PyrObject* argArray = (PyrObject*)newPyrArray(g->gc, numargs, 0, false);
-			SetObject(debugFrameObj->slots + 1, argArray);
+	int numargs = methraw->numargs;
+	int numvars = methraw->numvars;
+	if (numargs) {
+		PyrObject* argArray = (PyrObject*)newPyrArray(g->gc, numargs, 0, false);
+		SetObject(debugFrameObj->slots + 1, argArray);
 			for (int i=0; i<numargs; ++i)
-				slotCopy(&argArray->slots[i], &frame->vars[i]);
+			slotCopy(&argArray->slots[i],&frame->vars[i]);
 
-			argArray->size = numargs;
+		argArray->size = numargs;
 		} else
-			SetNil(debugFrameObj->slots + 1);
+		SetNil(debugFrameObj->slots + 1);
 
-		if (numvars) {
-			PyrObject* varArray = (PyrObject*)newPyrArray(g->gc, numvars, 0, false);
-			SetObject(debugFrameObj->slots + 2, varArray);
+	if (numvars) {
+		PyrObject* varArray = (PyrObject*)newPyrArray(g->gc, numvars, 0, false);
+		SetObject(debugFrameObj->slots + 2, varArray);
 			for (int i=0, j=numargs; i<numvars; ++i,++j)
-				slotCopy(&varArray->slots[i], &frame->vars[j]);
+			slotCopy(&varArray->slots[i],&frame->vars[j]);
 
-			varArray->size = numvars;
+		varArray->size = numvars;
 		} else
-			SetNil(debugFrameObj->slots + 2);
+		SetNil(debugFrameObj->slots + 2);
 
 		if (slotRawFrame(&frame->caller)) {
 			WorkQueueItem newWork = std::make_pair(slotRawFrame(&frame->caller), debugFrameObj->slots + 3);
 			workQueue.push_back(newWork);
 		} else
-			SetNil(debugFrameObj->slots + 3);
+		SetNil(debugFrameObj->slots + 3);
 
 		if (IsObj(&frame->context) && slotRawFrame(&frame->context) == frame)
-			SetObject(debugFrameObj->slots + 4, debugFrameObj);
+		SetObject(debugFrameObj->slots + 4,  debugFrameObj);
 		else if (NotNil(&frame->context)) {
 			WorkQueueItem newWork = std::make_pair(slotRawFrame(&frame->context), debugFrameObj->slots + 4);
 			workQueue.push_back(newWork);
 		} else
-			SetNil(debugFrameObj->slots + 4);
+		SetNil(debugFrameObj->slots + 4);
 	}
+	
+	SetInt( debugFrameObj->slots + 6, frame->line.ui );
+	SetInt( debugFrameObj->slots + 7, frame->character.ui );
 
 	typedef std::pair<PyrFrame*, PyrSlot*> WorkQueueItem;
 	typedef std::vector<WorkQueueItem> WorkQueueType;
@@ -2834,10 +2884,10 @@ void switchToThread(VMGlobals *g, PyrThread *newthread, int oldstate, int *numAr
 	//gcDumpInfo(g->gc);
 	gc = g->gc;
 
-	// save environment in oldthread
-	PyrSlot* currentEnvironmentSlot = &g->classvars->slots[1];
-	slotCopy(&oldthread->environment,currentEnvironmentSlot);
-	gc->GCWrite(oldthread, currentEnvironmentSlot);
+        // save environment in oldthread
+        PyrSlot* currentEnvironmentSlot = &g->classvars->slots[1];
+        slotCopy(&oldthread->environment,currentEnvironmentSlot);
+        gc->GCWrite(oldthread, currentEnvironmentSlot);
 
 	SetRaw(&oldthread->state, oldstate);
 
@@ -2963,7 +3013,7 @@ void initPyrThread(VMGlobals *g, PyrThread *thread, PyrSlot *func, int stacksize
 	PyrObject *array;
 	PyrGC* gc = g->gc;
 
-	slotCopy(&thread->func, func);
+	slotCopy(&thread->func,func);
 	gc->GCWrite(thread, func);
 
 	array = newPyrArray(gc, stacksize, 0, collect);
@@ -2982,6 +3032,10 @@ void initPyrThread(VMGlobals *g, PyrThread *thread, PyrSlot *func, int stacksize
 	SetFloat(&thread->seconds, seconds);
 	SetInt(&thread->numArgsPushed, 0);
 	SetInt(&thread->numpop, 0);
+	
+	
+	SetBool(&thread->debugging, false);
+	thread->dContinue = false;
 
 	if (IsNil(clock)) {
 		SetObject(&thread->clock, s_systemclock->u.classobj);
@@ -2991,13 +3045,13 @@ void initPyrThread(VMGlobals *g, PyrThread *thread, PyrSlot *func, int stacksize
 	}
 
 	PyrSlot* currentEnvironmentSlot = &g->classvars->slots[1];
-	slotCopy(&thread->environment,currentEnvironmentSlot);
-	gc->GCWrite(thread, currentEnvironmentSlot);
+        slotCopy(&thread->environment,currentEnvironmentSlot);
+        gc->GCWrite(thread, currentEnvironmentSlot);
 
 	if(g->process) { // check we're not just starting up
 		slotCopy(&thread->executingPath,&g->process->nowExecutingPath);
 		gc->GCWrite(thread, &g->process->nowExecutingPath);
-	}
+}
 
 	SetInt(&thread->stackSize, stacksize);
 }
@@ -3016,7 +3070,7 @@ int prThreadInit(struct VMGlobals *g, int numArgsPushed)
 	//CallStackSanity(g, "prThreadInit");
 	a = g->sp - 2;	// thread
 	b = g->sp - 1;	// function
-	c = g->sp;	// stacksize
+	c = g->sp;		// stacksize
 
 	thread = slotRawThread(a);
 
@@ -3043,6 +3097,36 @@ int prThreadInit(struct VMGlobals *g, int numArgsPushed)
 	//assert(g->gc->SanityCheck());
 	//CallStackSanity(g, "<prThreadInit");
 	return errNone;
+}
+
+int prThreadSetDebugging(struct VMGlobals *g, int numArgsPushed);
+int prThreadSetDebugging(struct VMGlobals *g, int numArgsPushed)
+{
+	PyrSlot *a = g->sp - 1;	// thread
+	PyrSlot *b = g->sp;		
+	
+	PyrThread *thread = a->uot;
+	if( IsTrue(b) )
+	{
+		SetBool(&thread->debugging, true);
+	} 
+	else 
+	{
+		SetBool(&thread->debugging, false);
+	}
+
+	return errNone;
+}
+
+int prThreadGetDebugging(struct VMGlobals *g, int numArgsPushed);
+int prThreadGetDebugging(struct VMGlobals *g, int numArgsPushed)
+{
+	PyrSlot *a = g->sp;	// thread
+	
+	PyrThread *thread = a->uot;
+		
+	SetBool(a, &thread->debugging);
+	return errNone;	
 }
 
 int prThreadRandSeed(struct VMGlobals *g, int numArgsPushed);
@@ -3112,6 +3196,22 @@ int prThreadSetRandData(struct VMGlobals *g, int numArgsPushed)
 	return errNone;
 }
 
+int prThreadGetBackTrace(struct VMGlobals *g, int numArgsPushed);
+int prThreadGetBackTrace(struct VMGlobals *g, int numArgsPushed)
+{
+	PyrSlot *a = g->sp; // thread
+
+	PyrThread *thread = a->uot;
+	if( IsNil( &(thread->frame) ) )
+	{
+		SetNil(a);
+	} else {
+		MakeDebugFrame(g, thread->frame.uof, a);
+	}
+	
+	return errNone;
+}
+
 #if 0
 int32 timeseed();
 
@@ -3148,6 +3248,28 @@ int transformMainThreadToRoutine(VMGlobals *g)
 void schedAdd(VMGlobals *g, PyrObject* inQueue, double inSeconds, PyrSlot* inTask);
 #endif
 
+int prRoutineDebugBreak(struct VMGlobals *g, int numArgsPushed);
+int prRoutineDebugBreak(struct VMGlobals *g, int numArgsPushed)
+{
+	PyrSlot value;
+	
+	slotCopy(&value,&g->receiver);
+	
+	if (!isKindOf((PyrObject*)g->thread, class_routine)) {
+		error ("yield was called outside of a Routine.\n");
+		return errFailed;
+	}
+	
+	PyrThread *parent = g->thread->parent.uot;
+	SetNil(&g->thread->parent);
+
+	switchToThread(g, parent, tSuspended, &numArgsPushed);
+	
+	// One extra arg, the receiver;
+	slotCopy((g->sp - numArgsPushed + 1),&value);
+	
+	return errNone;
+}
 
 int prRoutineYield(struct VMGlobals *g, int numArgsPushed);
 int prRoutineYield(struct VMGlobals *g, int numArgsPushed)
@@ -3243,7 +3365,7 @@ int prRoutineResume(struct VMGlobals *g, int numArgsPushed)
 
 		slotCopy(&thread->beats, &g->thread->beats);
 		slotCopy(&thread->seconds, &g->thread->seconds);
-		slotCopy(&thread->clock, &g->thread->clock);
+		slotCopy(&thread->clock,&g->thread->clock);
 		g->gc->GCWrite(thread, &g->thread->beats);
 		g->gc->GCWrite(thread, &g->thread->seconds);
 		g->gc->GCWrite(thread, &g->thread->clock);
@@ -3278,6 +3400,22 @@ int prRoutineResume(struct VMGlobals *g, int numArgsPushed)
 		switchToThread(g, thread, tSuspended, &numArgsPushed);
 		// on the other side of the looking glass, put the yielded value on the stack as the result..
 		slotCopy((g->sp - numArgsPushed + 1),&value);
+	} else if (state == tDebugging) {
+		// same as suspended, but just restore the stack, pop one off stack.
+		if (IsNil(&thread->parent)) {
+			SetObject(&thread->parent, g->thread);
+		}
+		g->gc->GCWrite(thread, g->thread);
+		
+		thread->beats.uf = g->thread->beats.uf;
+		thread->seconds.uf = g->thread->seconds.uf;
+		slotCopy(&thread->clock,&g->thread->clock);
+		g->gc->GCWrite(thread, &g->thread->clock);
+		
+		switchToThread(g, thread, tSuspended, &numArgsPushed);
+		g->sp--;
+		g->ip--;
+		g->thread->dContinue = true;
 	} else if (state == tDone) {
 		slotCopy(a,&thread->terminalValue);
 	} else if (state == tRunning) {
@@ -4069,6 +4207,10 @@ void initPrimitives()
 	definePrimitive(base, index++, "_TraceAnyPathToAllInstancesOf", prTraceAnyPathToAllInstancesOf, 1, 0);
 #endif
 
+	definePrimitive(base, index++, "_EnableDebug", prEnableDebug, 1, 0);	
+	definePrimitive(base, index++, "_DisableDebug", prDisableDebug, 1, 0);	
+	definePrimitive(base, index++, "_GetCurrentLine", prGetCurrentLine, 1, 0);	
+	
 	definePrimitive(base, index++, "_Identical", objectIdentical, 2, 0);
 	definePrimitive(base, index++, "_NotIdentical", objectNotIdentical, 2, 0);
 	definePrimitiveWithKeys(base, index, "_ObjectPerform", objectPerform, objectPerformWithKeys, 2, 1);
@@ -4127,11 +4269,16 @@ void initPrimitives()
 	definePrimitive(base, index++, "_FunDef_VarArgs", prFunDef_VarArgs, 1, 0);
 
 	definePrimitive(base, index++, "_Thread_Init", prThreadInit, 3, 0);
+	definePrimitive(base, index++, "_Thread_GetDebugging", prThreadGetDebugging, 1, 1);
+	definePrimitive(base, index++, "_Thread_SetDebugging", prThreadSetDebugging, 2, 0);
 	definePrimitive(base, index++, "_Thread_RandSeed", prThreadRandSeed, 2, 0);
 	definePrimitive(base, index++, "_Thread_GetRandData", prThreadGetRandData, 1, 0);
 	definePrimitive(base, index++, "_Thread_SetRandData", prThreadSetRandData, 2, 0);
+	definePrimitive(base, index++, "_Thread_GetBackTrace", prThreadGetBackTrace, 1, 0);
 //	definePrimitive(base, index++, "_ThreadRun", prThreadRun, 2, 0);
 //	definePrimitive(base, index++, "_RunNextThread", prRunNextThread, 1, 0);
+	
+	definePrimitive(base, index++, "_RoutineDebugBreak", prRoutineDebugBreak, 1, 0);
 	definePrimitive(base, index++, "_RoutineYield", prRoutineYield, 1, 0);
 	definePrimitive(base, index++, "_RoutineAlwaysYield", prRoutineAlwaysYield, 1, 0);
 	definePrimitive(base, index++, "_RoutineResume", prRoutineResume, 2, 0);
