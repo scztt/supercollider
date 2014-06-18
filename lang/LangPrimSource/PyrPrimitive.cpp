@@ -2110,7 +2110,7 @@ struct DebugFrameConstructor
 
 private:
 	void run_queue(VMGlobals *g)
-{
+  {
 		while (!workQueue.empty()) {
 			WorkQueueItem work = workQueue.back();
 			workQueue.pop_back();
@@ -2123,57 +2123,58 @@ private:
 		PyrMethod *meth = slotRawMethod(&frame->method);
 		PyrMethodRaw * methraw = METHRAW(meth);
 
-	/*
-		DebugFrame {
+    /*
+     DebugFrame {
 			var <functionDef, <args, <vars, <caller, <context, <address, <line, <character;
-		}
-	*/
+     }
+     */
 	
-	PyrObject* debugFrameObj = instantiateObject(g->gc, getsym("DebugFrame")->u.classobj, 0, false, true);
-	SetObject(outSlot, debugFrameObj);
+    PyrObject* debugFrameObj = instantiateObject(g->gc, getsym("DebugFrame")->u.classobj, 0, false, true);
+    SetObject(outSlot, debugFrameObj);
 
-	SetObject(debugFrameObj->slots + 0, meth);
-	SetPtr(debugFrameObj->slots + 5, meth);
+    SetObject(debugFrameObj->slots + 0, meth);
+    SetPtr(debugFrameObj->slots + 5, meth);
 
-	int numargs = methraw->numargs;
-	int numvars = methraw->numvars;
-	if (numargs) {
-		PyrObject* argArray = (PyrObject*)newPyrArray(g->gc, numargs, 0, false);
-		SetObject(debugFrameObj->slots + 1, argArray);
-			for (int i=0; i<numargs; ++i)
-			slotCopy(&argArray->slots[i],&frame->vars[i]);
+    int numargs = methraw->numargs;
+    int numvars = methraw->numvars;
+    if (numargs) {
+      PyrObject* argArray = (PyrObject*)newPyrArray(g->gc, numargs, 0, false);
+      SetObject(debugFrameObj->slots + 1, argArray);
+        for (int i=0; i<numargs; ++i)
+        slotCopy(&argArray->slots[i],&frame->vars[i]);
 
-		argArray->size = numargs;
-		} else
-		SetNil(debugFrameObj->slots + 1);
+      argArray->size = numargs;
+    } else
+      SetNil(debugFrameObj->slots + 1);
 
-	if (numvars) {
-		PyrObject* varArray = (PyrObject*)newPyrArray(g->gc, numvars, 0, false);
-		SetObject(debugFrameObj->slots + 2, varArray);
-			for (int i=0, j=numargs; i<numvars; ++i,++j)
-			slotCopy(&varArray->slots[i],&frame->vars[j]);
+    if (numvars) {
+      PyrObject* varArray = (PyrObject*)newPyrArray(g->gc, numvars, 0, false);
+      SetObject(debugFrameObj->slots + 2, varArray);
+        for (int i=0, j=numargs; i<numvars; ++i,++j)
+        slotCopy(&varArray->slots[i],&frame->vars[j]);
 
-		varArray->size = numvars;
-		} else
-		SetNil(debugFrameObj->slots + 2);
+      varArray->size = numvars;
+    } else
+      SetNil(debugFrameObj->slots + 2);
 
 		if (slotRawFrame(&frame->caller)) {
 			WorkQueueItem newWork = std::make_pair(slotRawFrame(&frame->caller), debugFrameObj->slots + 3);
 			workQueue.push_back(newWork);
 		} else
-		SetNil(debugFrameObj->slots + 3);
+      SetNil(debugFrameObj->slots + 3);
 
 		if (IsObj(&frame->context) && slotRawFrame(&frame->context) == frame)
-		SetObject(debugFrameObj->slots + 4,  debugFrameObj);
+      SetObject(debugFrameObj->slots + 4,  debugFrameObj);
 		else if (NotNil(&frame->context)) {
 			WorkQueueItem newWork = std::make_pair(slotRawFrame(&frame->context), debugFrameObj->slots + 4);
 			workQueue.push_back(newWork);
 		} else
-		SetNil(debugFrameObj->slots + 4);
+      SetNil(debugFrameObj->slots + 4);
+    
+    SetInt( debugFrameObj->slots + 6, frame->line.u.i );
+    SetInt( debugFrameObj->slots + 7, frame->character.u.i );
 	}
 	
-	SetInt( debugFrameObj->slots + 6, frame->line.ui );
-	SetInt( debugFrameObj->slots + 7, frame->character.ui );
 
 	typedef std::pair<PyrFrame*, PyrSlot*> WorkQueueItem;
 	typedef std::vector<WorkQueueItem> WorkQueueType;
@@ -3035,7 +3036,7 @@ void initPyrThread(VMGlobals *g, PyrThread *thread, PyrSlot *func, int stacksize
 	
 	
 	SetBool(&thread->debugging, false);
-	thread->dContinue = false;
+	SetFalse(&thread->dContinue);
 
 	if (IsNil(clock)) {
 		SetObject(&thread->clock, s_systemclock->u.classobj);
@@ -3105,7 +3106,7 @@ int prThreadSetDebugging(struct VMGlobals *g, int numArgsPushed)
 	PyrSlot *a = g->sp - 1;	// thread
 	PyrSlot *b = g->sp;		
 	
-	PyrThread *thread = a->uot;
+	PyrThread *thread = a->u.ot;
 	if( IsTrue(b) )
 	{
 		SetBool(&thread->debugging, true);
@@ -3123,7 +3124,7 @@ int prThreadGetDebugging(struct VMGlobals *g, int numArgsPushed)
 {
 	PyrSlot *a = g->sp;	// thread
 	
-	PyrThread *thread = a->uot;
+	PyrThread *thread = a->u.ot;
 		
 	SetBool(a, &thread->debugging);
 	return errNone;	
@@ -3201,12 +3202,12 @@ int prThreadGetBackTrace(struct VMGlobals *g, int numArgsPushed)
 {
 	PyrSlot *a = g->sp; // thread
 
-	PyrThread *thread = a->uot;
+	PyrThread *thread = a->u.ot;
 	if( IsNil( &(thread->frame) ) )
 	{
 		SetNil(a);
 	} else {
-		MakeDebugFrame(g, thread->frame.uof, a);
+		MakeDebugFrame(g, thread->frame.u.of, a);
 	}
 	
 	return errNone;
@@ -3260,7 +3261,7 @@ int prRoutineDebugBreak(struct VMGlobals *g, int numArgsPushed)
 		return errFailed;
 	}
 	
-	PyrThread *parent = g->thread->parent.uot;
+	PyrThread *parent = g->thread->parent.u.ot;
 	SetNil(&g->thread->parent);
 
 	switchToThread(g, parent, tSuspended, &numArgsPushed);
@@ -3407,15 +3408,15 @@ int prRoutineResume(struct VMGlobals *g, int numArgsPushed)
 		}
 		g->gc->GCWrite(thread, g->thread);
 		
-		thread->beats.uf = g->thread->beats.uf;
-		thread->seconds.uf = g->thread->seconds.uf;
+		thread->beats.u.f = g->thread->beats.u.f;
+		thread->seconds.u.f = g->thread->seconds.u.f;
 		slotCopy(&thread->clock,&g->thread->clock);
 		g->gc->GCWrite(thread, &g->thread->clock);
 		
 		switchToThread(g, thread, tSuspended, &numArgsPushed);
 		g->sp--;
 		g->ip--;
-		g->thread->dContinue = true;
+		SetTrue(&g->thread->dContinue);
 	} else if (state == tDone) {
 		slotCopy(a,&thread->terminalValue);
 	} else if (state == tRunning) {

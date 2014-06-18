@@ -1,4 +1,4 @@
-/*
+x/*
 	SuperCollider real time audio synthesis system
     Copyright (c) 2002 James McCartney. All rights reserved.
 	http://www.audiosynth.com
@@ -517,9 +517,46 @@ static inline void checkStackDepth(VMGlobals* g, PyrSlot * sp)
 #endif
 }
 
-#if defined(__GNUC__) || defined(__INTEL_COMPILER)
-#define LABELS_AS_VALUES
-#endif
+//#if defined(__GNUC__) || defined(__INTEL_COMPILER)
+//#define LABELS_AS_VALUES
+//#endif
+
+#define debug_step \
+if( IsTrue(&g->thread->debugging) ) \
+{ \
+  if( IsTrue(&g->thread->dContinue) ) \
+  { \
+    SetFalse(&g->thread->dContinue); \
+  } else { \
+    PyrBlock* debugBlock = g->block; \
+    if( debugBlock->debugTable.u.o ) \
+    { \
+      dumpOneByteCode(g->block, NULL, ip); \
+      \
+      uint32 *line = ((PyrInt32Array*)debugBlock->debugTable.u.o)->i + (2*(ip - (g->block->code.u.ob->b))); \
+      uint32 *character = ((PyrInt32Array*)debugBlock->debugTable.u.o)->i + (1+2*(ip - (g->block->code.u.ob->b))); \
+      SetInt( &g->thread->line, (int)*line ); \
+      SetInt( &g->thread->character, (int)*character ); \
+      \
+      SetInt( &g->frame->line, (int)*line ); \
+      SetInt( &g->frame->character, (int)*character ); \
+      \
+      selector = getsym("break"); \
+      classobj = classOfSlot(sp); \
+      index = classobj->classIndex.u.i + selector->u.index; \
+      meth = gRowTable[index]; \
+      \
+      PyrThread *oldthread = g->thread; \
+      g->sp = sp; g->ip = ip; \
+      doPrimitive(g, meth, 0 ); \
+      sp = g->sp; ip = g->ip; \
+      oldthread->state.u.i = tDebugging; \
+      continue; \
+    } else { \
+      sp = sp; \
+    } \
+  }\
+}
 
 #ifdef LABELS_AS_VALUES
 #define dispatch_opcode \
@@ -527,6 +564,7 @@ static inline void checkStackDepth(VMGlobals* g, PyrSlot * sp)
 	++ip;				\
 	checkStackDepth(g, sp); \
 	assert(checkStackOverflow(g, sp)); \
+  debug_step \
 	goto *opcode_labels[op1]
 #else
 #define dispatch_opcode break
@@ -845,6 +883,7 @@ HOT void Interpret(VMGlobals *g)
 #endif
 
 	// Codewarrior puts them in registers. take advantage..
+  SetTagRaw(g->sp, 0);
 	sp = g->sp;
 	ip = g->ip;
 
@@ -877,7 +916,45 @@ HOT void Interpret(VMGlobals *g)
 	//printf("op1 %d\n", op1);
 	//postfl("sp %08X   frame %08X  caller %08X  ip %08X\n", sp, g->frame, g->frame->caller.uof, g->frame->caller.uof->ip.ui);
 	//postfl("sp %08X   frame %08X   diff %d    caller %08X\n", sp, g->frame, ((int)sp - (int)g->frame)>>3, g->frame->caller.uof);
-	if (false && g->debugFlag && strcmp(g->method->ownerclass.s.u.oc->name.s.u.s->name, "String")==0) {
+  PyrSlot* slot = &g->method->ownerclass;
+	if (g->debugFlag) {
+    if( IsTrue(&g->thread->debugging) )
+    {
+      if( IsTrue(&g->thread->dContinue) )
+      {
+        SetFalse(&g->thread->dContinue);
+      } else {
+        PyrBlock* debugBlock = g->block;
+        if( debugBlock->debugTable.u.o )
+        {
+          dumpOneByteCode(g->block, NULL, ip);
+          
+          uint32 *line = ((PyrInt32Array*)debugBlock->debugTable.u.o)->i + (2*(ip - (g->block->code.u.ob->b)));
+          uint32 *character = ((PyrInt32Array*)debugBlock->debugTable.u.o)->i + (1+2*(ip - (g->block->code.u.ob->b)));
+          SetInt( &g->thread->line, (int)*line );
+          SetInt( &g->thread->character, (int)*character );
+          
+          SetInt( &g->frame->line, (int)*line );
+          SetInt( &g->frame->character, (int)*character );
+          
+          if (GetTag(sp) != 0) {
+            selector = getsym("break");
+            classobj = classOfSlot(sp);
+            index = classobj->classIndex.u.i + selector->u.index;
+            meth = gRowTable[index];
+            
+            PyrThread *oldthread = g->thread;
+            g->sp = sp; g->ip = ip;
+            doPrimitive(g, meth, 0 );
+            sp = g->sp; ip = g->ip;
+            oldthread->state.u.i = tDebugging;
+          }
+          continue;
+        } else {
+          sp = sp;
+        }
+      }
+    }
 		//DumpStack(g, sp);
 		if (FrameSanity(g->frame, "dbgint")) {
 			//Debugger();
@@ -895,7 +972,6 @@ HOT void Interpret(VMGlobals *g)
 //		classobj = g->method->ownerclass.uoc->superclass.us->u.classobj;
 //		goto msg_lookup;		
 	}
-#endif
 #ifdef GC_SANITYCHECK
 //	gcLinkSanity(g->gc);
 	g->gc->SanityCheck();
@@ -907,43 +983,6 @@ HOT void Interpret(VMGlobals *g)
 		slotRawInt(&g->method->byteMeter)++;
 	}
 #endif
-
-	if( IsTrue(&g->thread->debugging) ) 
-	{
-		if( g->thread->dContinue )
-		{
-			g->thread->dContinue = false;
-		} else {
-			PyrBlock* debugBlock = g->block;
-			if( debugBlock->debugTable.uo )
-			{
-				// Follow structure of methPrimative
-				dumpOneByteCode(g->block, NULL, ip);
-
-				uint32 *line = ((PyrInt32Array*)debugBlock->debugTable.uo)->i + (2*(ip - (g->block->code.uob->b)));
-				uint32 *character = ((PyrInt32Array*)debugBlock->debugTable.uo)->i + (1+2*(ip - (g->block->code.uob->b)));
-				SetInt( &g->thread->line, (int)*line );
-				SetInt( &g->thread->character, (int)*character );
-
-				SetInt( &g->frame->line, (int)*line );
-				SetInt( &g->frame->character, (int)*character );
-				 
-				selector = getsym("break");
-				classobj = classOfSlot(sp);
-				index = classobj->classIndex.ui + selector->u.index;
-				meth = gRowTable[index];
-				
-				PyrThread *oldthread = g->thread;
-				g->sp = sp; g->ip = ip;				
-				doPrimitive(g, meth, 0 );
-				sp = g->sp; ip = g->ip;
-				oldthread->state.ui = tDebugging;
-				continue; 
-			} else {
-				sp = sp;
-			}
-		}
-	}
 				
 	switch (op1) {
 		case 0 : //	push class

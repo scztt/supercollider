@@ -1284,7 +1284,7 @@ void PyrMethodNode::compile(PyrSlot *result)
 	//postfl("method %p raw %p\n", method, methraw);
 	method->contextDef = o_nil;
 	method->name = mMethodName->mSlot;
-	if( strcmp( method->name.s.u.s->name, "none") == 0 )
+	if( strcmp( method->name.u.s->name, "none") == 0 )
 	{
 		method->name = mMethodName->mSlot;
 		//ptable = debugTable;

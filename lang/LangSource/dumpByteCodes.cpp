@@ -72,10 +72,10 @@ unsigned char* dumpOneByteCode(PyrBlock *theBlock, PyrClass* theClass, unsigned 
 	n = ip - ipbeg;
 	op1 = *ip++;
 
-	if( theBlock->debugTable.uo )
+	if( theBlock->debugTable.u.o )
 	{
-		line = *( ((PyrInt32Array*)theBlock->debugTable.uo)->i + (2*(ip - (theBlock->code.uob->b) - 1)) );
-		character = *( ((PyrInt32Array*)theBlock->debugTable.uo)->i + (1+2*(ip - (theBlock->code.uob->b) - 1)) );
+		line = *( ((PyrInt32Array*)theBlock->debugTable.u.o)->i + (2*(ip - (theBlock->code.u.ob->b) - 1)) );
+		character = *( ((PyrInt32Array*)theBlock->debugTable.u.o)->i + (1+2*(ip - (theBlock->code.u.ob->b) - 1)) );
 	} else {
 		line = 0; character = 0;
 	}

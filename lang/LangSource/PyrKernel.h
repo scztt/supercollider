@@ -90,7 +90,7 @@ struct PyrFrame : public PyrObjectHdr
 	PyrSlot vars[1];
 };
 
-#define FRAMESIZE 7
+#define FRAMESIZE 8
 
 struct PyrProcess : public PyrObjectHdr
 {
@@ -122,7 +122,7 @@ struct PyrThread : public PyrObjectHdr
 	PyrSlot executingPath;
 	PyrSlot oldExecutingPath;
 	PyrSlot stackSize;
-	bool dContinue;
+	PyrSlot dContinue;
 };
 
 #define EVALSTACKDEPTH 512

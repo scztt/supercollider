@@ -1672,6 +1672,7 @@ void initClasses()
 		addIntrinsicVar(class_thread, "threadPlayer", &o_nil);
 		addIntrinsicVar(class_thread, "executingPath", &o_nil);
 		addIntrinsicVar(class_thread, "oldExecutingPath", &o_nil);
+    addIntrinsicVar(class_thread, "stackSize", &o_zero);
 		addIntrinsicVar(class_thread, "dContinue", &o_false);
 
 	class_finalizer = makeIntrinsicClass(s_finalizer, s_object, 2, 0);
