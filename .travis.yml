@@ -1,5 +1,7 @@
-compiler: 
- - clang
+language: cpp
+compiler:
+  - gcc
+  - clang
 
 os:
  - linux
@@ -32,5 +34,5 @@ script: make
 notifications:
  email:
    - scott@artificia.org
- on_success: always
+ on_success: change
  on_failure: always
