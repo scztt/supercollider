@@ -9,7 +9,7 @@ cache: apt
 
 before_install:
  - ifmac () { if [[ $TRAVIS_OS_NAME == osx ]]; then eval $@; fi; }
- - iflin () { if [[ $TRAVIS_OS_NAME == lin ]]; then eval $@; fi; }
+ - iflin () { if [[ $TRAVIS_OS_NAME == linux ]]; then eval $@; fi; }
  - ifmac brew update
  - ifmac brew install cmake qt5 
  - iflin sudo apt-add-repository -y ppa:ubuntu-sdk-team/ppa
