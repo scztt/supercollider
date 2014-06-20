@@ -10,7 +10,7 @@ before_install:
 before_script:
  - mkdir BUILD
  - cd BUILD
- - cmake -DCMAKE_PREFIX_PATH=/usr/local/Cellar/qt5/5.2.1 -DSC_QT=1 .. --debug-output
+ - cmake -DCMAKE_PREFIX_PATH=/usr/local/Cellar/qt5/5.3.0 -DSC_QT=1 .. --debug-output
 
 script: make
 
