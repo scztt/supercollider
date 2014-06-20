@@ -1,9 +1,7 @@
-language: cpp
-compiler:
-  - gcc
+compiler: 
+ - clang
 
 os:
- - linux
  - osx
 
 cache: apt
