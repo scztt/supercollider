@@ -5,7 +5,9 @@ os:
  - linux
  - osx
 
-cache: apt
+cache: 
+ - apt
+ - bundler
 
 before_install:
  - ifmac () { if [[ $TRAVIS_OS_NAME == osx ]]; then eval $@; fi; }
@@ -33,13 +35,15 @@ script:
  - make install
 
 before_deploy:
+ # required for github releases
  - git fetch --tags
  - export BUILD_PREFIX=$TRAVIS_REPO_SLUG/$TRAVIS_OS_NAME
- - export TAG_NAME=${TRAVIS_TAG:=head}
+ - export FWD_HTML='<html><head><meta http-equiv="refresh" content="0; url=SC-'$COMMIT_NAME'.zip" /></head></html>'
  - mkdir $HOME/artifacts
- - zip -r $HOME/artifacts/SC-$COMMIT_NAME.zip Install/
- - echo '<html><head><meta http-equiv="refresh" content="0; url=http://supercollider.s3.amazonaws.com/builds/'$BUILD_PREFIX/SC-$COMMIT_NAME.zip'" /></head></html>' > $HOME/artifacts/$TRAVIS_BRANCH-latest.html
- - echo '<html><head><meta http-equiv="refresh" content="0; url=http://supercollider.s3.amazonaws.com/builds/'$BUILD_PREFIX/SC-$COMMIT_NAME.zip'" /></head></html>' > $HOME/artifacts/$TAG_NAME.html
+ - cd Install
+ - zip -r $HOME/artifacts/SC-$COMMIT_NAME.zip SuperCollider
+ - echo $FWD_HTML > $HOME/artifacts/$TRAVIS_BRANCH-latest.html
+ - '[ ! -z "$TRAVIS_TAG" ] && echo $FWD_HTML > $HOME/artifacts/$TRAVIS_TAG.html'
 
 deploy:
  - provider: s3
