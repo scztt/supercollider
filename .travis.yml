@@ -31,12 +31,15 @@ before_script:
 
 script:
  - make install
- - mkdir $HOME/artifacts
-# - mv build_log.txt $HOME/artifacts/build_log.txt
- - zip -r $HOME/artifacts/SC-$COMMIT_NAME.zip $PWD/Install/
 
 before_deploy:
  - git fetch --tags
+ - export BUILD_PREFIX=$TRAVIS_REPO_SLUG/$TRAVIS_OS_NAME
+ - export TAG_NAME=${TRAVIS_TAG:=head}
+ - mkdir $HOME/artifacts
+ - zip -r $HOME/artifacts/SC-$COMMIT_NAME.zip Install/
+ - echo '<html><head><meta http-equiv="refresh" content="0; url=http://supercollider.s3.amazonaws.com/builds/'$BUILD_PREFIX/SC-$COMMIT_NAME.zip'" /></head></html>' > $HOME/artifacts/$TRAVIS_BRANCH-latest.html
+ - echo '<html><head><meta http-equiv="refresh" content="0; url=http://supercollider.s3.amazonaws.com/builds/'$BUILD_PREFIX/SC-$COMMIT_NAME.zip'" /></head></html>' > $HOME/artifacts/$TAG_NAME.html
 
 deploy:
  - provider: s3
@@ -45,7 +48,7 @@ deploy:
      secure: jWZbN5Nmlbv1RNZgRRsb1gkTflzSGUXDJGUUgIaQR3zYYb/3K9vHoX25HPckbJ6djnAu5vWXyBuMKA4ftaHRzBkg/+9sNN3sJi4xLdM5TfCSpbazO1n5cuDlVJ0uXB0wsiwGWvYP7PiXnw0vlxe94mScuesExK6IbGCzFc14PIc=
    bucket: supercollider
    local-dir: $HOME/artifacts
-   upload-dir: builds/$TRAVIS_BUILD_NUMBER-$TRAVIS_OS_NAME
+   upload-dir: builds/$BUILD_PREFIX
    region: us-west-2
    skip_cleanup: true
    endpoint: s3-us-west-2.amazonaws.com
