@@ -12,7 +12,6 @@ cache:
 before_install:
  - ifmac () { if [[ $TRAVIS_OS_NAME == osx ]]; then eval $@; fi; }
  - iflin () { if [[ $TRAVIS_OS_NAME == linux ]]; then eval $@; fi; }
- - export COMMIT_NAME=`echo $TRAVIS_COMMIT | cut -c1-7`
  - ifmac brew update
  - ifmac brew install cmake qt5
  - iflin sudo apt-add-repository -y ppa:ubuntu-sdk-team/ppa
@@ -37,13 +36,14 @@ script:
 before_deploy:
  # required for github releases
  - git fetch --tags
+ - export COMMIT_NAME=$TRAVIS_COMMIT
  - export BUILD_PREFIX=$TRAVIS_REPO_SLUG/$TRAVIS_OS_NAME
  - export FWD_HTML='<html><head><meta http-equiv="refresh" content="0; url=SC-'$COMMIT_NAME'.zip" /></head></html>'
  - mkdir $HOME/artifacts
  - cd Install
  - zip -r $HOME/artifacts/SC-$COMMIT_NAME.zip SuperCollider
  - echo $FWD_HTML > $HOME/artifacts/$TRAVIS_BRANCH-latest.html
- - '[ ! -z "$TRAVIS_TAG" ] && echo $FWD_HTML > $HOME/artifacts/$TRAVIS_TAG.html'
+ - 'if [[ ! -z "$TRAVIS_TAG" ]]; then echo $FWD_HTML > $HOME/artifacts/$TRAVIS_TAG.html; fi;'
 
 deploy:
  - provider: s3
