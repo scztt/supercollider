@@ -20,7 +20,7 @@ OSXPlatform : UnixPlatform
 	}
 
 	startup {
-		Server.program = "exec %/scsynth".format((String.scDir +/+ "../MacOS").shellQuote);
+		Server.program = "exec %/scsynth".format(String.scDir.shellQuote);
 
 		Score.program = Server.program;
 
@@ -35,14 +35,13 @@ OSXPlatform : UnixPlatform
 		};
 	}
 	shutdown {
-		HIDDeviceService.releaseDeviceList;
 		if(Platform.ideName == "scapp"){
 			CocoaMenuItem.clearCustomItems;
 		};
 	}
 
 	defaultGUIScheme { ^\qt }
-	defaultHIDScheme { ^\osx_hid }
+    defaultHIDScheme { ^nil }
 
 	setDeferredTaskInterval { |interval| _SetDeferredTaskInterval }
 
