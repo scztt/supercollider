@@ -66,12 +66,20 @@ SC_TerminalClient::SC_TerminalClient(const char* name)
 	  mUseReadline(false),
       mWork(mIoService),
 	  mTimer(mIoService),
+    mHasStdIn(false),
 #ifndef _WIN32
-	  mStdIn(mInputService, STDIN_FILENO)
+	  mStdIn(mInputService)
 #else
 	  mStdIn(mInputService, GetStdHandle(STD_INPUT_HANDLE))
 #endif
-{}
+{
+	try {
+		mStdIn = boost::asio::posix::stream_descriptor(mInputService, STDIN_FILENO);
+    mHasStdIn = true;
+	} catch (boost::system::system_error& e) {
+		// we're in a state where we can't get stdin, likely being run in an .app bundle - this is fine.
+	}
+}
 
 SC_TerminalClient::~SC_TerminalClient()
 {}
@@ -508,12 +516,14 @@ void SC_TerminalClient::readlineInit()
 
 void SC_TerminalClient::startInputRead()
 {
+	if (mStdIn.is_open()) {
 #ifdef HAVE_READLINE
-	if (mUseReadline)
-		mStdIn.async_read_some(boost::asio::null_buffers(), boost::bind(&SC_TerminalClient::onInputRead, this, _1, _2));
-	else
+		if (mUseReadline)
+			mStdIn.async_read_some(boost::asio::null_buffers(), boost::bind(&SC_TerminalClient::onInputRead, this, _1, _2));
+		else
 #endif
-		mStdIn.async_read_some(boost::asio::buffer(inputBuffer), boost::bind(&SC_TerminalClient::onInputRead, this, _1, _2));
+			mStdIn.async_read_some(boost::asio::buffer(inputBuffer), boost::bind(&SC_TerminalClient::onInputRead, this, _1, _2));
+	}
 }
 
 void SC_TerminalClient::onInputRead(const boost::system::error_code &error, std::size_t bytes_transferred)
@@ -553,11 +563,12 @@ void SC_TerminalClient::inputThreadFn()
 	if (mUseReadline)
 		readlineInit();
 #endif
+  if (mHasStdIn) {
+    startInputRead();
 
-	startInputRead();
-
-	boost::asio::io_service::work work(mInputService);
-	mInputService.run();
+    boost::asio::io_service::work work(mInputService);
+    mInputService.run();
+  }
 }
 
 

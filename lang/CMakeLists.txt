@@ -88,23 +88,30 @@ set(sclang_sources
 	${CMAKE_SOURCE_DIR}/common/sc_popen.cpp
 )
 
+set(ide_name scide)
+
 if(APPLE)
 	set_property(SOURCE ${CMAKE_SOURCE_DIR}/common/SC_DirUtils.cpp PROPERTY COMPILE_FLAGS -xobjective-c++)
 	
-	list(APPEND sclang_sources ${CMAKE_SOURCE_DIR}/common/SC_Apple.mm)
+	list(APPEND  ${CMAKE_SOURCE_DIR}/common/SC_Apple.mm)
 	set_source_files_properties(${CMAKE_SOURCE_DIR}/common/SC_Apple.mm PROPERTIES COMPILE_FLAGS "-x objective-c++ -fobjc-exceptions")
 endif()
+
+file(GLOB_RECURSE headers ../include/*.h* )
+file(GLOB_RECURSE external_headers ../external_libraries/*.h* )
+list(APPEND sclang_headers ${headers} ${external_headers}) # make qt creator happy
+source_group("include" FILES ${headers})
+source_group("external\\include" FILES ${external_headers})
 
 if (NOT Boost_FOUND)
 	file(GLOB boost_system_sources ../external_libraries/boost/libs/system/src/*cpp)
 	file(GLOB boost_fs_sources ../external_libraries/boost/libs/filesystem/src/*cpp)
 	file(GLOB boost_regex_sources ../external_libraries/boost/libs/regex/src/*cpp)
+	file(GLOB_RECURSE boost_headers ../external_libraries/boost/*.h*)
 	list(APPEND sclang_sources ${boost_fs_sources} ${boost_system_sources} ${boost_regex_sources})
+	source_group("boost\\src" REGULAR_EXPRESSION "external_libraries/boost/.*\\.cpp")
+	source_group("boost\\include" FILES ${boost_headers})
 endif()
-
-file(GLOB_RECURSE headers ../include/*.h* )
-file(GLOB_RECURSE external_headers ../external_libraries/*.h* )
-list(APPEND sclang_sources ${headers} ${external_headers}) # make qt creator happy
 
 if(NOT WIN32)
 	list(APPEND sclang_sources LangPrimSource/PyrSerialPrim.cpp)
@@ -118,7 +125,7 @@ if(UNIX)
 			LangPrimSource/SC_CoreMIDI.cpp
 			LangPrimSource/SC_CoreAudioPrim.cpp
 			LangPrimSource/SC_Speech.mm
-			)
+		)
 		add_definitions(-DHAVE_SPEECH)
 	else(APPLE)
 		if(ALSA_FOUND)
@@ -132,13 +139,14 @@ if(UNIX)
 endif(UNIX)
 
 if(WIN32)
-        list(APPEND sclang_sources ${CMAKE_SOURCE_DIR}/common/SC_Win32Utils.cpp)
+    list(APPEND sclang_sources ${CMAKE_SOURCE_DIR}/common/SC_Win32Utils.cpp)
 	include_directories (../platform/windows/compat_stuff)
-        if(NOT MINGW)
-                # mingw-w64 provides getopt
-                list(APPEND sclang_sources ../platform/windows/compat_stuff/getopt/getopt.c)
-                include_directories(../platform/windows/compat_stuff/getopt)
-        endif()
+
+    if(NOT MINGW)
+        # mingw-w64 provides getopt
+        list(APPEND sclang_sources ../platform/windows/compat_stuff/getopt/getopt.c)
+        include_directories(../platform/windows/compat_stuff/getopt)
+    endif()
 
 	if(PORTMIDI_FOUND)
 		include_directories (${PORTMIDI_INCLUDE_DIRS})
@@ -149,11 +157,11 @@ endif()
 
 # This sets up the exe icon for windows under mingw.
 if(MINGW)
- set(RES_FILES ${CMAKE_SOURCE_DIR}/platform/windows/Resources/sclang.rc)
- set(CMAKE_RC_COMPILER_INIT windres)
- ENABLE_LANGUAGE(RC)
- SET(CMAKE_RC_COMPILE_OBJECT
- "<CMAKE_RC_COMPILER> -O coff <DEFINES> -i <SOURCE> -o <OBJECT>")
+	set(RES_FILES ${CMAKE_SOURCE_DIR}/platform/windows/Resources/sclang.rc)
+	set(CMAKE_RC_COMPILER_INIT windres)
+	ENABLE_LANGUAGE(RC)
+	SET(CMAKE_RC_COMPILE_OBJECT
+		"<CMAKE_RC_COMPILER> -O coff <DEFINES> -i <SOURCE> -o <OBJECT>")
 endif(MINGW)
 
 if(SC_WII)
@@ -169,9 +177,9 @@ if(SC_WII)
 			message(SEND_ERROR "Cannot find libcwiid or libbluetooth.\n (If Wii support is not required, then set SC_WII=no)")
 		endif()
 	elseif(APPLE)
-                add_definitions(-DHAVE_WII)
-                list(APPEND sclang_sources LangPrimSource/WiiMote_OSX/wiiremote.c)
-                include_directories(LangPrimSource/WiiMote_OSX)
+		add_definitions(-DHAVE_WII)
+		list(APPEND sclang_sources LangPrimSource/WiiMote_OSX/wiiremote.c)
+include_directories(LangPrimSource/WiiMote_OSX)
 	endif()
 endif()
 
@@ -179,24 +187,27 @@ if(SC_QT OR SC_IDE)
 	set(QT_COLLIDER_LANG_CLIENT ON)
 	include(../QtCollider/CMakeLists.txt)
 	list(APPEND sclang_sources ${QT_COLLIDER_SRCS})
+	list(APPEND sclang_headers ${QT_COLLIDER_HDRS})
 endif()
 
 if(SC_IDE)
 	add_definitions(-DSC_IDE -DQT_NO_KEYWORDS)
 
-	qt5_wrap_cpp( SCLANG_MOC_SRCS ../editors/sc-ide/primitives/sc_ipc_client.hpp )
+	qt5_wrap_cpp(sclang_moc_srcs ../editors/sc-ide/primitives/sc_ipc_client.hpp)
 	list(APPEND sclang_sources ../editors/sc-ide/primitives/sc_ipc_client.cpp)
-	list(APPEND sclang_sources ${SCLANG_MOC_SRCS})
+	list(APPEND sclang_headers ../editors/sc-ide/primitives/sc_ipc_client.hpp)
+	list(APPEND sclang_sources ${sclang_moc_srcs})
 endif()
 
 include(../SCDoc/CMakeLists.txt)
 list(APPEND sclang_sources ${SCDOC_SRCS})
+list(APPEND sclang_headers ${SCDOC_HDRS})
 
 if(0 AND FINAL_BUILD) # sclang final-builds are broken
 	CREATE_FINAL_FILE(libsclang_final.cpp ${sclang_sources})
 	add_library(libsclang STATIC libsclang_final.cpp ${sclang_parser_source})
 else()
-	add_library(libsclang STATIC ${sclang_sources} ${sclang_parser_source})
+	add_library(libsclang STATIC ${sclang_sources} ${sclang_headers} ${sclang_parser_source})
 endif()
 
 target_compile_definitions(libsclang PRIVATE YYSTACK_USE_ALLOC)
@@ -204,7 +215,6 @@ target_link_libraries(libsclang tlsf ${PTHREADS_LIBRARIES})
 
 if(SC_IDE OR SC_QT)
 	message("libsclang qt libs:" ${QT_COLLIDER_LIBS})
-	#qt5_use_modules(libsclang Core)
 	find_package(Qt5Core)
 	get_target_property(QtCore_location Qt5::Core LOCATION)
 	message("core: " ${QtCore_location} )
@@ -313,7 +323,44 @@ endif()
 
 target_link_libraries(libsclang ${YAMLCPP_LIBRARY})
 
-add_executable(sclang LangSource/cmdLineFuncs.cpp ${RES_FILES})
+set(Icons ../../icons/SCcube.icns)
+set_source_files_properties(${Icons} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+SET(MACOSX_BUNDLE_ICON_FILE ../../icons/SCcube.icns)
+list(APPEND RES_FILES ${Icons})
+
+if(APPLE AND SC_QT)
+	# determines the app name and app install location (scappbundlename, scappdir):
+	include (${CMAKE_SOURCE_DIR}/cmake_modules/MacAppFolder.cmake)
+	set(sclang_name ${scappbundlename})
+
+    if(NOT SC_SYMLINK_CLASSLIB)
+        foreach(file ${ClassLibrary} ${HelpSource})
+            string(REPLACE ${CMAKE_SOURCE_DIR} "" PathInBundle ${file} )
+            get_filename_component(PathInBundle "${PathInBundle}" DIRECTORY)
+            set_source_files_properties(${file} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/${PathInBundle})
+        endforeach()
+    endif()
+
+    foreach(file ${Sounds})
+        string(REPLACE ${CMAKE_SOURCE_DIR} "" PathInBundle ${file} )
+        get_filename_component(PathInBundle "${PathInBundle}" DIRECTORY)
+        set_source_files_properties(${file} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/${PathInBundle})
+    endforeach()
+
+    set(AdditionalBundleSources ${ClassLibrary} ${HelpSource} ${BundleResources} ${Examples} ${Sounds} ${Icons})
+endif()
+ 
+if(APPLE AND SC_QT)
+	add_executable(sclang MACOSX_BUNDLE
+		LangSource/cmdLineFuncs.cpp 
+		${RES_FILES}
+		${AdditionalBundleSources}
+	)
+	set(MACOSX_BUNDLE_BUNDLE_NAME sclang)
+else()
+	add_executable(sclang LangSource/cmdLineFuncs.cpp ${RES_FILES})
+endif()
+
 target_link_libraries(sclang libsclang)
 target_link_libraries(sclang ${ICU_LIBRARIES})
 
@@ -326,13 +373,30 @@ if(LTO)
 					APPEND PROPERTY LINK_FLAGS "-flto -flto-report -fwhole-program")
 endif()
 
-if(APPLE)
-	# determines the app name and app install location (scappbundlename, scappdir):
-	include (${CMAKE_SOURCE_DIR}/cmake_modules/MacAppFolder.cmake)
-
+if(APPLE AND SC_QT)
+    include(DeployQt5)
+    include(InstallRequiredSystemLibraries)
 	install(TARGETS sclang
 			DESTINATION "${scappbindir}"
-			PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+			PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+	)
+
+    add_custom_command(TARGET sclang POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:scsynth> $<TARGET_FILE_DIR:sclang>/../Resources)
+
+    if(TARGET supernova)
+        add_dependencies(sclang supernova)
+        add_custom_command(TARGET sclang POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:supernova> $<TARGET_FILE_DIR:sclang>/../Resources)
+    endif()
+
+    foreach(plugin ${plugins} ${supernova_plugins})
+        add_custom_command(TARGET sclang POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:sclang>/../Resources/plugins/
+            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${plugin}> $<TARGET_FILE_DIR:sclang>/../Resources/plugins/)
+    endforeach()
+
+    install_qt5_executable("${scappbindir}/sclang.app" "" "" "${CMAKE_BINARY_DIR}/server/scsynth;")
 elseif(WIN32)
 	install(TARGETS sclang
 			DESTINATION "SuperCollider"
@@ -342,3 +406,5 @@ elseif(NOT APPLE)
 			RUNTIME DESTINATION "bin"
 			PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 endif()
+
+

@@ -19,3 +19,5 @@ include_directories(
     ${SCDOC_DIR}
 )
 
+source_group("SCDoc\\src" FILES ${SCDOC_SRCS})
+source_group("SCDoc\\include" FILES ${SCDOC_HDRS})

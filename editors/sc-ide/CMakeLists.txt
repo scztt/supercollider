@@ -23,35 +23,10 @@ if(${CMAKE_COMPILER_IS_GNUCXX})
     add_definitions(-Wreorder)
 endif()
 
-if (APPLE)
-  include (${CMAKE_SOURCE_DIR}/cmake_modules/MacAppFolder.cmake)
-  set(ide_name ${scappbundlename})
-else()
-  set(ide_name scide)
-endif()
-
 if(APPLE)
-    if(NOT SC_SYMLINK_CLASSLIB)
-        foreach(file ${ClassLibrary} ${HelpSource})
-            string(REPLACE ${CMAKE_SOURCE_DIR} "" PathInBundle ${file} )
-            get_filename_component(PathInBundle "${PathInBundle}" DIRECTORY)
-            set_source_files_properties(${file} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/${PathInBundle})
-        endforeach()
-    endif()
-
-    foreach(file ${Sounds})
-        string(REPLACE ${CMAKE_SOURCE_DIR} "" PathInBundle ${file} )
-        get_filename_component(PathInBundle "${PathInBundle}" DIRECTORY)
-        set_source_files_properties(${file} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/${PathInBundle})
-    endforeach()
-
-    file(GLOB Icons "../../icons/*.icns")
-    set_source_files_properties(${Icons} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
-
-    set(AdditionalBundleSources ${ClassLibrary} ${HelpSource} ${BundleResources} ${Examples} ${Sounds} ${Icons})
+    set( Icons ../../icons/SCcube.icns)
+    set_source_files_properties(../../icons/SCcube.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 endif()
-
-
 
 set ( ide_moc_hdr
     core/main.hpp
@@ -97,8 +72,6 @@ set ( ide_moc_hdr
     widgets/util/color_widget.hpp
     widgets/util/docklet.hpp
     widgets/util/volume_widget.hpp
-
-    ${CMAKE_SOURCE_DIR}/QtCollider/widgets/web_page.hpp
 )
 
 file (GLOB_RECURSE all_hdr *hpp)
@@ -147,10 +120,6 @@ set ( ide_src
     widgets/util/volume_widget.cpp
     widgets/util/status_box.cpp
     widgets/style/style.cpp
-
-    ${CMAKE_SOURCE_DIR}/QtCollider/widgets/web_page.cpp
-
-    ${CMAKE_SOURCE_DIR}/common/SC_TextUtils.cpp
 )
 
 set( ide_forms
@@ -161,40 +130,57 @@ set( ide_forms
     forms/settings_shortcuts.ui
 )
 
+####################################################################
 # QtCollider shared sources:
 list(APPEND ide_moc_hdr
     ${CMAKE_SOURCE_DIR}/QtCollider/layouts/stack_layout.hpp
+    ${CMAKE_SOURCE_DIR}/QtCollider/widgets/web_page.hpp
 )
+
 list(APPEND ide_src
     ${CMAKE_SOURCE_DIR}/QtCollider/layouts/stack_layout.cpp
+    ${CMAKE_SOURCE_DIR}/QtCollider/widgets/web_page.cpp
 )
 
-list(APPEND ide_src ${CMAKE_SOURCE_DIR}/common/SC_DirUtils.cpp)
-if(APPLE)
-	set_property(SOURCE ${CMAKE_SOURCE_DIR}/common/SC_DirUtils.cpp PROPERTY COMPILE_FLAGS -xobjective-c++)
+if (APPLE)
+    list(APPEND ide_src ${CMAKE_SOURCE_DIR}/QtCollider/hacks/hacks_mac.mm)
 endif()
 
+####################################################################
+# Common shared sources:
+list(APPEND ide_src 
+    ${CMAKE_SOURCE_DIR}/common/SC_DirUtils.cpp
+    ${CMAKE_SOURCE_DIR}/common/SC_TextUtils.cpp
+)
+
 if(APPLE)
+	set_property(SOURCE ${CMAKE_SOURCE_DIR}/common/SC_DirUtils.cpp PROPERTY COMPILE_FLAGS -xobjective-c++)
+
 	list(APPEND ide_src 
         ${CMAKE_SOURCE_DIR}/common/SC_StandAloneInfo_Darwin.cpp
-        ${CMAKE_SOURCE_DIR}/QtCollider/hacks/hacks_mac.mm
     )
 elseif(WIN32)
     list(APPEND ide_src ${CMAKE_SOURCE_DIR}/common/SC_Win32Utils.cpp)
 endif()
 
+####################################################################
+# Includes
 include_directories(${CMAKE_SOURCE_DIR}/include/common)
 include_directories(${CMAKE_SOURCE_DIR}/common)
 include_directories(${CMAKE_SOURCE_DIR}/include/plugin_interface)
 include_directories(${YAMLCPP_INCLUDE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/external_libraries/boost)
+
 # For QtCollider headers:
 include_directories(${CMAKE_SOURCE_DIR})
+
 # Needed for auto-generated forms headers:
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/widgets/util)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/widgets)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
+
+####################################################################
 # Translation files
 set( translation_src
     ${CMAKE_CURRENT_SOURCE_DIR}/translations/scide_de.ts
@@ -219,13 +205,14 @@ add_custom_target( update_ide_translations
             -no-obsolete -pluralonly
 )
 
+####################################################################
+# Generated files
 qt5_wrap_cpp( ide_moc_src ${ide_moc_hdr} )
-qt5_wrap_ui( ide_forms_src ${ide_forms} )
 qt5_add_resources( ide_rcc resources.qrc )
+qt5_wrap_ui( ide_forms_src ${ide_forms} )
 qt5_add_translation( translations ${translation_src} ${native_translation_src} )
 
 set(ide_sources ${ide_src} ${all_hdr} )
-
 set(ide_rc_sources ${ide_moc_src} ${ide_forms_src} ${ide_rcc} ${translations})
 
 if(APPLE)
@@ -233,6 +220,11 @@ if(APPLE)
         set_source_files_properties(${file} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/translations)
     endforeach()
 endif()
+
+source_group("Header Files\\generated" FILES ${ide_forms_src})
+source_group("Source Files\\generated" FILES ${ide_moc_src} ${ide_rcc})
+
+
 
 # This sets up the exe icon for windows under mingw.
 if(MINGW)
@@ -252,11 +244,7 @@ else()
   add_executable( SuperCollider MACOSX_BUNDLE ${ide_sources} ${ide_rc_sources} ${RES_FILES} ${AdditionalBundleSources})
 endif()
 
-if(APPLE)
-    set_target_properties(SuperCollider PROPERTIES OUTPUT_NAME "${ide_name}")
-else()
-    set_target_properties(SuperCollider PROPERTIES OUTPUT_NAME "scide")
-endif()
+set_target_properties(SuperCollider PROPERTIES OUTPUT_NAME "SuperCollider")
 
 target_link_libraries( SuperCollider
     ${QT_IDE_LIBRARIES}
@@ -304,26 +292,25 @@ endif()
 
 
 # Installation
-
 if(APPLE)
     add_dependencies(SuperCollider sclang scsynth ${plugins} ${supernova_plugins})
-    add_custom_command(TARGET SuperCollider POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:sclang> $<TARGET_FILE_DIR:SuperCollider>/../MacOS)
+#    add_custom_command(TARGET SuperCollider POST_BUILD
+#        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:sclang> $<TARGET_FILE_DIR:SuperCollider>/../MacOS)
 
-    add_custom_command(TARGET SuperCollider POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:scsynth> $<TARGET_FILE_DIR:SuperCollider>/../MacOS)
+#    add_custom_command(TARGET SuperCollider POST_BUILD
+#        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:scsynth> $<TARGET_FILE_DIR:SuperCollider>/../MacOS)
 
-    if(TARGET supernova)
-        add_dependencies(SuperCollider supernova)
-        add_custom_command(TARGET SuperCollider POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:supernova> $<TARGET_FILE_DIR:SuperCollider>/../MacOS)
-    endif()
+#    if(TARGET supernova)
+#        add_dependencies(SuperCollider supernova)
+#        add_custom_command(TARGET SuperCollider POST_BUILD
+#            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:supernova> $<TARGET_FILE_DIR:SuperCollider>/../MacOS)
+#    endif()
 
-    foreach(plugin ${plugins} ${supernova_plugins})
-        add_custom_command(TARGET SuperCollider POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:SuperCollider>/../Resources/plugins/
-            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${plugin}> $<TARGET_FILE_DIR:SuperCollider>/../Resources/plugins/)
-    endforeach()
+#    foreach(plugin ${plugins} ${supernova_plugins})
+#        add_custom_command(TARGET SuperCollider POST_BUILD
+#            COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:SuperCollider>/../Resources/plugins/
+#            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${plugin}> $<TARGET_FILE_DIR:SuperCollider>/../Resources/plugins/)
+#    endforeach()
 
 
     if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
@@ -346,7 +333,7 @@ if(APPLE)
     include(InstallRequiredSystemLibraries)
 
     include(DeployQt5)
-    install_qt5_executable("${scappbundlename}/${scappbundlename}.app" "" "" "${CMAKE_BINARY_DIR}/lang/sclang;${CMAKE_BINARY_DIR}/server/scsynth;${CMAKE_BINARY_DIR}/external_libraries")
+    install_qt5_executable("${scappbundlename}/${scappbundlename}.app" "" "" "${CMAKE_BINARY_DIR}/lang/sclang;${CMAKE_BINARY_DIR}/external_libraries")
 
     # install Qt plugins (adapted from kvirc)
     set(plugin_dest_dir ${CMAKE_INSTALL_PREFIX}/SuperCollider/SuperCollider.app/Contents/Plugins)
