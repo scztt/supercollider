@@ -27,8 +27,6 @@ include_directories(${CMAKE_SOURCE_DIR}/include/common
 
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")
 	find_package(ALSA)
-elseif(WIN32)
-	find_package(Portmidi)
 endif()
 
 find_package(Readline 5.0)
@@ -301,9 +299,7 @@ endif()
 
 if (WIN32)
 	target_link_libraries(libsclang wsock32 ws2_32)
-	if(PORTMIDI_FOUND)
-		target_link_libraries(libsclang ${PORTMIDI_LIBRARIES})
-	endif()
+    target_link_libraries(libsclang portmidi)
 endif()
 
 if (GC_SANITYCHECK)
