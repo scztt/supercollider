@@ -88,6 +88,7 @@ public:
         CloseToolBox,
         ShowFullScreen,
         FocusPostWindow,
+		ReloadStyleSheet,
 
         // Settings
         ShowSettings,
@@ -152,6 +153,7 @@ public Q_SLOTS:
     void showFindTool();
     void showReplaceTool();
     void showGoToLineTool();
+	void reloadStyleSheet();
     void hideToolBox();
 
     void showSettings();

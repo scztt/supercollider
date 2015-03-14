@@ -409,6 +409,13 @@ void MainWindow::createActions()
     connect(action, SIGNAL(triggered()), mPostDocklet, SLOT(focus()));
     settings->addAction( action, "post-focus", ideCategory);
 
+	mActions[ReloadStyleSheet] = action = new QAction( tr("Reload Stylesheet"), this);
+	action->setStatusTip(tr("reload the style sheet"));
+	action->setShortcut(tr("Ctrl+L", "reload stylesheet"));
+	connect(action, SIGNAL(triggered()), this, SLOT(reloadStyleSheet()));
+	settings->addAction( action, "reload-stylesheet", ideCategory);
+
+
     // Language
     mActions[LookupImplementation] = action = new QAction(
         QIcon::fromTheme("window-lookupdefinition"), tr("Look Up Implementations..."), this);
@@ -632,6 +639,7 @@ void MainWindow::createMenus()
     menu->addAction( mActions[FocusPostWindow] );
     menu->addSeparator();
     menu->addAction( mActions[ShowFullScreen] );
+	menu->addAction( mActions[ReloadStyleSheet] );
 
     menuBar->addMenu(menu);
 
@@ -1500,6 +1508,15 @@ void MainWindow::showGoToLineTool()
 
     mGoToLineTool->setFocus();
 }
+
+void MainWindow::reloadStyleSheet()
+{
+	QFile f("/Users/scott/Documents/_code/supercollider/editors/sc-ide/ide-style.css");
+	f.open(QFile::ReadOnly | QFile::Text);
+	QTextStream ts(&f);
+	qApp->setStyleSheet(ts.readAll());
+}
+
 
 void MainWindow::showFindTool()
 {

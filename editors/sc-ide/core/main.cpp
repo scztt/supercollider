@@ -84,6 +84,11 @@ int main( int argc, char *argv[] )
 
     app.setStyle( new ScIDE::Style(app.style()) );
 
+	QFile f("/Users/scott/Documents/_code/supercollider/editors/sc-ide/ide-style.css");
+	f.open(QFile::ReadOnly | QFile::Text);
+	QTextStream ts(&f);
+	qApp->setStyleSheet(ts.readAll());
+
     // Go...
 
     Main * main = Main::instance();

@@ -74,7 +74,12 @@ void QtCollider::init() {
 
     qcApp->setQuitOnLastWindowClosed( false );
 
-    //qcApp->setStyle( new QtCollider::Style::StyleImpl( new QPlastiqueStyle ) );
+  	QFile f("/Users/scott/Documents/_code/supercollider/editors/sc-ide/ide-style.css");
+	  f.open(QFile::ReadOnly | QFile::Text);
+	  QTextStream ts(&f);
+	  qcApp->setStyleSheet(ts.readAll());
+
+	  //qcApp->setStyle( new QtCollider::Style::StyleImpl( new QPlastiqueStyle ) );
 
     gSystemPalette = qcApp->palette();
 

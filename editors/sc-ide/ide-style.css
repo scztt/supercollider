@@ -1,0 +1,97 @@
+QWidget {
+	font: 11px;				
+	font-family: "M+ 2p";
+}
+
+QTabBar::tab {				
+	background: #999999;
+	border-bottom-left-radius: 0px; 
+	border-bottom-right-radius: 0px; 
+	border-left: 1px solid rgba(0, 0, 0, 20); 
+	min-height: 16px;		
+	padding: 5px;			
+	padding-top: 3px;	
+	font-weight: 300;		
+	font: 11px;				
+	font-family: "M+ 2p";
+	font-weight: 100;
+	color: #444444; 	
+}							
+QTabBar::tab::hover {		
+	background: #AAAAAA;	
+}							
+QTabBar::tab::selected {	
+	background: #CCCCCC;	
+	border-left: 1px solid #888888; 
+	border-bottom: 3px solid rgb(33, 127, 236); 
+	border-right: 1px solid #888888; 
+	font-weight: 1000;		
+	padding-bottom: 2px;		
+}			
+QPushButton, QToolButton {
+    border: 0px solid rgb(210, 210, 210);
+    border-radius: 0px;
+	font: 11px;				
+	font-family: "M+ 2p"; 	
+}
+QPushButton {
+    background-color: rgb(200, 200, 200);
+    padding: 2px;
+    min-width: 80px;
+}
+QPushButton::hover, QToolButton::hover {
+	background-color: rgb(190, 190, 190);
+}
+QPushButton::pressed, QToolButton::pressed  {
+    border: 1px solid rgb(150, 150, 150);
+	background-color: rgb(160, 160, 160);
+}
+
+QCheckBox, QRadioButton
+{
+    border-radius: 1px;
+}
+QRadioButton::indicator, QCheckBox::indicator
+{
+    border: 1px solid rgb(150, 150, 150);
+    border-radius: 0px;
+	background: rgb(0,0,0,50);
+    margin: 2px;
+    width: 8px;
+    height: 8px;
+    padding: 0.5px;
+}
+
+QCheckBox::indicator:checked {
+	padding: 0.5px;
+    background-image: url("/Volumes/ssd/_code/open-iconic/svg/check.svg");
+    background-position: center center;
+    background-repeat: none;
+}
+
+QRadioButton::indicator:checked {
+	border-width: 2px;
+	padding: 0px;
+    background-color: rgb(33, 127, 236);
+    background-clip: content;
+}
+
+QSpinBox, QLineEdit {
+	padding: 1px;
+    border-radius: 2px;
+	background-color: rgb(160, 160, 160);
+}
+QSpinBox { 
+	padding-right: 20px;
+}
+QSpinBox::up-button {
+	border: none;
+    width: 15px;
+    height: 15px;
+} 
+QSpinBox::up-arrow {
+    background-image
+    x`: url("/Volumes/ssd/_code/open-iconic/svg/arrow-down.svg");
+    width: 15px;
+    height: 15px;
+} 
