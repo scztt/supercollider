@@ -337,13 +337,11 @@ if(APPLE AND SC_QT)
     endforeach()
 
     set(AdditionalBundleSources ${ClassLibrary} ${HelpSource} ${BundleResources} ${Examples} ${Sounds} ${Icons})
-endif()
- 
-if(APPLE AND SC_QT)
-	add_executable(sclang MACOSX_BUNDLE
+
+	add_executable(
+		sclang 
+		MACOSX_BUNDLE
 		LangSource/cmdLineFuncs.cpp 
-		${RES_FILES}
-		${AdditionalBundleSources}
 	)
 	set(MACOSX_BUNDLE_BUNDLE_NAME sclang)
 else()
