@@ -24,7 +24,7 @@ if(${CMAKE_COMPILER_IS_GNUCXX})
     add_definitions(-Wreorder)
 endif()
 
-if(APPLE)
+if (APPLE)
     set(Icons ${CMAKE_SOURCE_DIR}/icons/sc_ide.icns)
     set_source_files_properties(${Icons} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
     SET(MACOSX_BUNDLE_ICON_FILE sc_ide.icns)
@@ -63,6 +63,7 @@ set ( ide_moc_hdr
     widgets/code_editor/line_indicator.hpp
     widgets/code_editor/overlay.hpp
     widgets/code_editor/autocompleter.hpp
+    widgets/code_editor/completion_menu.hpp
     widgets/settings/dialog.hpp
     widgets/settings/general_page.hpp
     widgets/settings/sclang_page.hpp
@@ -92,6 +93,7 @@ set ( ide_src
     core/settings/theme.cpp
     core/session_manager.cpp
     core/util/standard_dirs.cpp
+    core/util/scdoc_log.cpp
     widgets/cmd_line.cpp
     widgets/doc_list.cpp
     widgets/documents_dialog.cpp
@@ -111,6 +113,7 @@ set ( ide_src
     widgets/code_editor/line_indicator.cpp
     widgets/code_editor/overlay.cpp
     widgets/code_editor/autocompleter.cpp
+    widgets/code_editor/completion_menu.cpp
     widgets/settings/dialog.cpp
     widgets/settings/general_page.cpp
     widgets/settings/sclang_page.cpp
@@ -123,6 +126,14 @@ set ( ide_src
     widgets/util/volume_widget.cpp
     widgets/util/status_box.cpp
     widgets/style/style.cpp
+
+    ${CMAKE_SOURCE_DIR}/QtCollider/widgets/web_page.cpp
+
+    ${CMAKE_SOURCE_DIR}/common/SC_TextUtils.cpp
+
+    ${CMAKE_SOURCE_DIR}/SCDoc/SCDoc.cpp
+    ${CMAKE_SOURCE_DIR}/SCDoc/SCDoc.tab.cpp
+    ${CMAKE_SOURCE_DIR}/SCDoc/lex.scdoc.cpp
 )
 
 set( ide_forms
@@ -145,7 +156,7 @@ list(APPEND ide_src
     ${CMAKE_SOURCE_DIR}/QtCollider/widgets/web_page.cpp
 )
 
-if (APPLE)
+if(APPLE)
     list(APPEND ide_src ${CMAKE_SOURCE_DIR}/QtCollider/hacks/hacks_mac.mm)
 endif()
 
@@ -181,6 +192,8 @@ include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/widgets/util)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/widgets)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+include(${CMAKE_SOURCE_DIR}/SCDoc/CMakeLists.txt)
 
 
 ####################################################################
