@@ -323,6 +323,12 @@ if(APPLE)
     include(DeployQt5)
     include(InstallRequiredSystemLibraries)
 
+    # Delete the nested sclang.app BEFORE we do any install/fixup - otherwise, Cmake fixup
+    # mixes the inner app's dependencies with the outer app's dependencies.
+    install(CODE "
+        execute_process(COMMAND rm -rf ${CMAKE_INSTALL_PREFIX}/${scappbundlename}/${scappbundlename}.app/Contents/MacOS)
+    ")
+
     install(TARGETS SuperCollider DESTINATION ${scappbundlename})
 
     # for processing into the plist:
