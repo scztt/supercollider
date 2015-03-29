@@ -376,11 +376,13 @@ if(APPLE AND SC_QT)
 	)
 
     add_custom_command(TARGET sclang POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:sclang>/../Resources/
         COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:scsynth> $<TARGET_FILE_DIR:sclang>/../Resources/)
 
     if(TARGET supernova)
         add_dependencies(sclang supernova)
         add_custom_command(TARGET sclang POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:sclang>/../Resources/
             COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:supernova> $<TARGET_FILE_DIR:sclang>/../Resources/)
     endif()
 
