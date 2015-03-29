@@ -282,6 +282,8 @@ endif()
 configure_file(common/SC_Version.hpp.in common/SC_Version.hpp)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/common)
 
+cmake_policy(SET CMP0009 NEW)
+
 file(GLOB_RECURSE ClassLibrary SCClassLibrary/*sc)
 file(GLOB_RECURSE HelpSource   HelpSource/*)
 file(GLOB_RECURSE Sounds       sounds/*)
