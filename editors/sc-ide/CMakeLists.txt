@@ -20,6 +20,11 @@ set(QT_IDE_LIBRARIES
     Qt5::Core Qt5::WebKitWidgets Qt5::OpenGL Qt5::PrintSupport Qt5::Sensors Qt5::Quick Qt5::Qml Qt5::Sql Qt5::Positioning
 )
 
+if (APPLE)
+  find_package(Qt5MacExtras)
+  list(APPEND QT_IDE_LIBRARIES Qt5::MacExtras)
+endif()
+
 if(${CMAKE_COMPILER_IS_GNUCXX})
     add_definitions(-Wreorder)
 endif()
