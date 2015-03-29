@@ -314,7 +314,7 @@ endif()
 
 # Installation
 if(APPLE)
-    add_dependencies(SuperCollider sclang scsynth ${plugins} ${supernova_plugins})
+    add_dependencies(SuperCollider sclang scsynth)
 
     if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
         set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/Install" CACHE PATH "Install path prefix" FORCE)
