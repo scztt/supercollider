@@ -209,6 +209,11 @@ bool SC_TerminalClient::parseOptions(int& argc, char**& argv, Options& opt)
 				return false;
 		}
 	}
+    
+    if (getenv("DAEMON")) {
+        ::post("DAEMON: Running in daemon mode.");
+        opt.mDaemon = true;
+    }
 
 	argv += optind;
 	argc -= optind;
