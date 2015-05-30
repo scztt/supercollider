@@ -39,9 +39,9 @@ fi
 
 
 if [ ! copy_libs == true ]; then
-	echo "Symlinking Frameworks and PlugIns folders"
+	echo "Symlinking Frameworks and Plugins folders"
 
-	link_dirs=( Frameworks PlugIns )
+	link_dirs=( Frameworks Plugins )
 
 	for link_dir in "${link_dirs[@]}"
 	do
