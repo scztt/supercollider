@@ -124,7 +124,11 @@ bool QcApplication::event( QEvent *event )
     case QEvent::FileOpen: {
         // open the file dragged onto the application icon on Mac
         QFileOpenEvent *fe = static_cast<QFileOpenEvent*>(event);
-        interpret( QString("if ('ScIDE'.asClass.postln.notNil and: { 'ScIDE'.asClass.connected }) { 'Document'.asClass.open(\"%1\") } { \"%1\".load(); }").arg(fe->file()), false );
+        interpret( QString("Platform.doOpenFile(\"%1\");").arg(
+            fe->file()
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+        ), false );
         event->accept();
         return true;
     }
