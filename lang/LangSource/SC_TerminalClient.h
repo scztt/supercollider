@@ -62,7 +62,7 @@ public:
 	{
 		Options()
 			: mLibraryConfigFile(0),
-			  mDaemon(true),
+			  mDaemon(false),
 			  mCallRun(false),
 			  mCallStop(false),
 			  mStandalone(false),

@@ -123,7 +123,7 @@ void SC_TerminalClient::printUsage()
 			"Options:\n"
 			"   -v                             Print supercollider version and exit\n"
 			"   -d <path>                      Set runtime directory\n"
-			"   -I                             Enter interactive mode (allow input)\n"
+			"   -D                             Enter daemon mode (no input)\n"
 			"   -g <memory-growth>[km]         Set heap growth (default %s)\n"
 			"   -h                             Display this message and exit\n"
 			"   -l <path>                      Set library configuration file\n"
@@ -153,8 +153,8 @@ bool SC_TerminalClient::parseOptions(int& argc, char**& argv, Options& opt)
 			case 'd':
 				opt.mRuntimeDir = optarg;
 				break;
-			case 'I':
-				opt.mDaemon = false;
+			case 'D':
+				opt.mDaemon = true;
 				break;
 			case 'g':
 				if (!parseMemArg(optarg, &opt.mMemGrow)) {
@@ -198,7 +198,6 @@ bool SC_TerminalClient::parseOptions(int& argc, char**& argv, Options& opt)
 				break;
 			case 'i':
 				gIdeName = optarg;
-				opt.mDaemon = false;
 				break;
 			case 'a':
 				opt.mStandalone = true;
