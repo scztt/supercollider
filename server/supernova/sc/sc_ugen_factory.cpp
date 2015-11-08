@@ -81,7 +81,7 @@ Unit * sc_ugen_def::construct(sc_synthdef::unit_spec_t const & unit_spec, sc_syn
         w->mFromUnit = unit;
         w->mCalcRate = unit->mCalcRate;
 
-        w->mBuffer = 0;
+        w->mBuffer = nullptr;
         w->mScalarValue = 0;
 
         if (unit->mCalcRate == 2) {
@@ -143,7 +143,7 @@ sample * sc_bufgen_def::run(World * world, uint32_t buffer_index, struct sc_msg_
     (func)(world, buf, args);
 
     if (data == buf->data)
-        return NULL;
+        return nullptr;
     else
         return data;
 }
@@ -165,7 +165,7 @@ sc_ugen_def * sc_plugin_container::find_ugen(symbol const & name)
 {
     ugen_set_type::iterator it = ugen_set.find(name, named_hash_hash(), named_hash_equal());
     if (it == ugen_set.end())
-        return 0;
+        return nullptr;
 
     return &*it;
 }
@@ -198,7 +198,7 @@ sample * sc_plugin_container::run_bufgen(World * world, const char * name, uint3
     bufgen_set_type::iterator it = bufgen_set.find(name, named_hash_hash(), named_hash_equal());
     if (it == bufgen_set.end()) {
         std::cout << "unable to find buffer generator: " << name << std::endl;
-        return NULL;
+        return nullptr;
     }
 
     return it->run(world, buffer_index, args);
@@ -242,7 +242,7 @@ void sc_ugen_factory::load_plugin ( boost::filesystem::path const & path )
     using namespace std;
 
     void * handle = dlopen(path.string().c_str(), RTLD_NOW | RTLD_LOCAL);
-    if (handle == NULL)
+    if (handle == nullptr)
         return;
 
     typedef int (*info_function)();
@@ -282,11 +282,15 @@ void sc_ugen_factory::load_plugin ( boost::filesystem::path const & path )
 
 void sc_ugen_factory::close_handles(void)
 {
-#if 0
-    /* closing the handles has some unwanted side effects, so we leave them open */
-    for(void * handle : open_handles)
-        dlclose(handle);
-#endif
+    for(void * handle : open_handles){
+        void *ptr = dlsym(handle, "unload");
+        if(ptr){
+            UnLoadPlugInFunc unloadFunc = (UnLoadPlugInFunc)ptr;
+            (*unloadFunc)();
+        }
+        //dlclose(handle);
+    }
+
 }
 
 #elif defined(_WIN32)
@@ -300,7 +304,7 @@ void sc_ugen_factory::load_plugin ( boost::filesystem::path const & path )
         char *s;
         DWORD lastErr = GetLastError();
         FormatMessage( FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                       NULL, lastErr , MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (char*)&s, 0, NULL );
+                       nullptr, lastErr , MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (char*)&s, 0, NULL );
 
         std::cout << "Cannot open plugin: " << path << s << std::endl;
         LocalFree( s );
@@ -332,7 +336,7 @@ void sc_ugen_factory::load_plugin ( boost::filesystem::path const & path )
     if (!ptr) {
         char *s;
         FormatMessage( FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                       NULL, GetLastError() , MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (char*)&s, 0, NULL );
+                       nullptr, GetLastError() , MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (char*)&s, 0, NULL );
 
         std::cout << "*** ERROR: GetProcAddress err " << s << std::endl;
         LocalFree( s );
@@ -340,7 +344,7 @@ void sc_ugen_factory::load_plugin ( boost::filesystem::path const & path )
         FreeLibrary(hinstance);
         return;
     }
-
+    open_handles.push_back(hinstance);
     LoadPlugInFunc loadFunc = (LoadPlugInFunc)ptr;
     (*loadFunc)(&sc_interface);
 
@@ -350,7 +354,17 @@ void sc_ugen_factory::load_plugin ( boost::filesystem::path const & path )
 }
 
 void sc_ugen_factory::close_handles(void)
-{}
+{
+    for(void * ptrhinstance : open_handles){
+        HINSTANCE hinstance = (HINSTANCE)ptrhinstance;
+        void *ptr = (void *)GetProcAddress( hinstance, "unload" );
+        if(ptr){
+            UnLoadPlugInFunc unloadFunc = (UnLoadPlugInFunc)ptr;
+            (*unloadFunc)();
+        }
+        //FreeLibrary(hinstance);
+    }
+}
 #else
 
 #endif

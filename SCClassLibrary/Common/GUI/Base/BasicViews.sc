@@ -15,8 +15,7 @@ TextViewBase : View {
 	}
 }
 
-ItemViewBase : View
-{
+ItemViewBase : View {
 	var <items;
 
 	items_ { arg stringArray;
@@ -293,6 +292,19 @@ Button : View {
 	states_ { arg stateArray;
 		states = stateArray;
 		super.setProperty( \states, stateArray );
+	}
+
+	string_ { arg string;
+		if(states.isNil) {
+			this.states = [[string]]
+		} {
+			states[this.value][0] = string;
+			this.states = states;
+		}
+	}
+
+	string {
+		^states !? { states[this.value][0] }
 	}
 
 	action_ { arg func;

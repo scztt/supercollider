@@ -31,7 +31,7 @@
 
 #include <boost/bind.hpp>
 
-#ifdef SC_WIN32
+#ifdef _WIN32
 # define __GNU_LIBRARY__
 # include "getopt.h"
 # include "SC_Win32Utils.h"
@@ -57,6 +57,7 @@
 #include "VMGlobals.h"
 #include "SC_DirUtils.h"   // for gIdeName
 #include "SC_LanguageConfig.hpp"
+#include "SC_Version.hpp"
 
 static FILE* gPostDest = stdout;
 
@@ -120,6 +121,7 @@ void SC_TerminalClient::printUsage()
 	fprintf(stdout, "Usage:\n   %s [options] [file..] [-]\n\n", getName());
 	fprintf(stdout,
 			"Options:\n"
+			"   -v                             Print supercollider version and exit\n"
 			"   -d <path>                      Set runtime directory\n"
 			"   -D                             Enter daemon mode (no input)\n"
 			"   -g <memory-growth>[km]         Set heap growth (default %s)\n"
@@ -140,7 +142,7 @@ void SC_TerminalClient::printUsage()
 
 bool SC_TerminalClient::parseOptions(int& argc, char**& argv, Options& opt)
 {
-	const char* optstr = ":d:Dg:hl:m:rsu:i:a";
+	const char* optstr = ":d:Dg:hl:m:rsu:i:av";
 	int c;
 
 	// inhibit error reporting
@@ -173,6 +175,11 @@ bool SC_TerminalClient::parseOptions(int& argc, char**& argv, Options& opt)
 				break;
 			case 'r':
 				opt.mCallRun = true;
+				break;
+			case 'v':
+				fprintf(stdout, "sclang %s\n", SC_VersionString().c_str());
+				quit(0);
+				return false;
 				break;
 			case 's':
 				opt.mCallStop = true;
@@ -394,7 +401,7 @@ void SC_TerminalClient::onQuit( int exitCode )
 	stop();
 }
 
-extern void ElapsedTimeToChrono(double elapsed, chrono::system_clock::time_point & out_time_point);
+extern void ElapsedTimeToChrono(double elapsed, std::chrono::system_clock::time_point & out_time_point);
 
 void SC_TerminalClient::tick( const boost::system::error_code& error )
 {
@@ -407,7 +414,7 @@ void SC_TerminalClient::tick( const boost::system::error_code& error )
 
 	flush();
 
-	chrono::system_clock::time_point nextAbsTime;
+	std::chrono::system_clock::time_point nextAbsTime;
 	ElapsedTimeToChrono( secs, nextAbsTime );
 
 	if (haveNext) {
@@ -516,14 +523,28 @@ void SC_TerminalClient::readlineInit()
 
 void SC_TerminalClient::startInputRead()
 {
-	if (mStdIn.is_open()) {
-#ifdef HAVE_READLINE
-		if (mUseReadline)
-			mStdIn.async_read_some(boost::asio::null_buffers(), boost::bind(&SC_TerminalClient::onInputRead, this, _1, _2));
-		else
+#ifndef _WIN32
+	if (mUseReadline)
+		mStdIn.async_read_some(boost::asio::null_buffers(), boost::bind(&SC_TerminalClient::onInputRead, this, _1, _2));
+	else
+		mStdIn.async_read_some(boost::asio::buffer(inputBuffer), boost::bind(&SC_TerminalClient::onInputRead, this, _1, _2));
+#else
+	mStdIn.async_wait( [&] (const boost::system::error_code & error) {
+		if(error)
+			onInputRead(error, 0);
+		else {
+			DWORD bytes_transferred;
+
+			::ReadFile(GetStdHandle(STD_INPUT_HANDLE),
+					   inputBuffer.data(),
+					   inputBuffer.size(),
+					   &bytes_transferred,
+					   nullptr);
+
+			onInputRead(error, bytes_transferred);
+		}
+	});
 #endif
-			mStdIn.async_read_some(boost::asio::buffer(inputBuffer), boost::bind(&SC_TerminalClient::onInputRead, this, _1, _2));
-	}
 }
 
 void SC_TerminalClient::onInputRead(const boost::system::error_code &error, std::size_t bytes_transferred)
@@ -564,11 +585,11 @@ void SC_TerminalClient::inputThreadFn()
 		readlineInit();
 #endif
   if (mHasStdIn) {
-    startInputRead();
+	startInputRead();
 
-    boost::asio::io_service::work work(mInputService);
-    mInputService.run();
-  }
+	boost::asio::io_service::work work(mInputService);
+	mInputService.run();
+}
 }
 
 
@@ -646,7 +667,7 @@ int SC_TerminalClient::prArgv(struct VMGlobals* g, int)
 		PyrString* str = newPyrString(g->gc, argv[i], 0, true);
 		SetObject(argvObj->slots+i, str);
 		argvObj->size++;
-		g->gc->GCWrite(argvObj, (PyrObject*)str);
+		g->gc->GCWriteNew(argvObj, (PyrObject*)str); // we know str is white so we can use GCWriteNew
 	}
 
 	return errNone;

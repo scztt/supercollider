@@ -32,22 +32,27 @@
 #include <cmath>
 
 static bool announced = false;
+static QObject *paintingObject = NULL;
 static QPainter *painter = 0;
 static QPainterPath path;
 
 namespace QtCollider {
 
-  void announcePainting() { announced = true; }
+  void announcePainting() {
+    announced = true;
+  }
   bool paintingAnnounced() { return announced; }
+  bool isPaintingObject(QObject* obj) { return obj == paintingObject; }
 
-  bool beginPainting( QPainter *p )
+  bool beginPainting( QPainter *p, QObject* obj )
   {
     if( painter ) {
-      qcErrorMsg( QString("Painting already in progress!") );
+      qcErrorMsg( QStringLiteral("Painting already in progress!") );
       return false;
     }
 
     painter = p;
+    paintingObject = obj;
 
     painter->setRenderHint( QPainter::Antialiasing, true );
     QColor black( 0,0,0 );
@@ -65,6 +70,7 @@ namespace QtCollider {
   {
     painter = 0;
     announced = false;
+    paintingObject = NULL;
   }
 
   QPainter *globalPainter() { return painter; }
@@ -103,7 +109,7 @@ inline static qreal radToDeg( qreal rad )
 
 inline static bool isPenValid() {
     if( !painter ) {
-      qcErrorMsg( QString("Usage of QPen is not allowed at this point!") );
+      qcErrorMsg( QStringLiteral("Usage of QPen is not allowed at this point!") );
       return false;
     }
     return true;

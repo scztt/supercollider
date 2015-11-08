@@ -135,7 +135,7 @@ bool SingleInstanceGuard::tryConnect(QStringList const & arguments)
     const int maxNumberOfInstances = 128;
     if (!arguments.empty()) {
         for (int socketID = 0; socketID != maxNumberOfInstances; ++socketID) {
-            QString serverName = QString("SuperColliderIDE_Singleton_%1").arg(socketID);
+            QString serverName = QStringLiteral("SuperColliderIDE_Singleton_%1").arg(socketID);
             QSharedPointer<QLocalSocket> socket (new QLocalSocket(this));
             socket->connectToServer(serverName);
 
@@ -149,7 +149,7 @@ bool SingleInstanceGuard::tryConnect(QStringList const & arguments)
                 QDataStream stream(socket.data());
                 stream.setVersion(QDataStream::Qt_4_6);
 
-                stream << QString("open");
+                stream << QStringLiteral("open");
                 stream << canonicalArguments;
                 if (!socket->waitForBytesWritten(300))
                     qWarning("SingleInstanceGuard: writing data to another IDE instance timed out");
@@ -161,7 +161,7 @@ bool SingleInstanceGuard::tryConnect(QStringList const & arguments)
 
     mIpcServer = new QLocalServer(this);
     for (int socketID = 0; socketID != maxNumberOfInstances; ++socketID) {
-        QString serverName = QString("SuperColliderIDE_Singleton_%1").arg(socketID);
+        QString serverName = QStringLiteral("SuperColliderIDE_Singleton_%1").arg(socketID);
 
         bool listening = mIpcServer->listen(serverName);
         if (listening) {
@@ -191,7 +191,7 @@ void SingleInstanceGuard::onIpcData()
     if ( in.status() != QDataStream::Ok )
         return;
 
-    if (id == QString("open")) {
+    if (id == QStringLiteral("open")) {
         foreach (QString path, message)
             Main::documentManager()->open(path);
     }
@@ -225,6 +225,7 @@ Main::Main(void) :
 void Main::quit() {
     mSessionManager->saveSession();
     storeSettings();
+    mScProcess->stopLanguage();
     QApplication::quit();
 }
 
@@ -273,7 +274,7 @@ bool Main::nativeEventFilter(const QByteArray &, void * message, long *)
 {
     bool result = false;
 
-#ifdef APPLE
+#ifdef Q_OS_MAC
     if (QtCollider::Mac::IsCmdPeriodKeyDown(reinterpret_cast<void *>(message)))
     {
 //        QKeyEvent event(QEvent::KeyPress, Qt::Key_Period, Qt::ControlModifier, ".");

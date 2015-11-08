@@ -28,6 +28,8 @@
 #include "server.hpp"
 #include "server_args.hpp"
 
+#include "SC_Version.hpp"
+
 #include "../sc/sc_ugen_factory.hpp"
 #include "../sc/sc_synth_definition.hpp"
 #include "../utilities/utils.hpp"
@@ -178,7 +180,7 @@ void start_audio_backend(server_arguments const & args)
 
 
     bool success = instance->open_stream(input_device, input_channels, output_device, output_channels,
-        args.samplerate, args.blocksize, args.blocksize);
+        args.samplerate, args.blocksize, args.hardware_buffer_size);
 
     if (!success) {
         cout << "could not open portaudio device name: " << input_device << " / " << output_device << endl;
@@ -186,6 +188,9 @@ void start_audio_backend(server_arguments const & args)
     }
     cout << "opened portaudio device name: ";
     cout << input_device << " / " << output_device << endl;
+    
+    instance->report_latency();
+    
     instance->prepare_backend();
     instance->activate_audio();
 }
@@ -271,7 +276,7 @@ void load_synthdefs(nova_server & server, server_arguments const & args)
     using namespace std;
 
 #ifndef NDEBUG
-    auto start_time = chrono::high_resolution_clock::now();
+    auto start_time = std::chrono::high_resolution_clock::now();
 #endif
 
     if (args.load_synthdefs) {
@@ -293,9 +298,9 @@ void load_synthdefs(nova_server & server, server_arguments const & args)
             load_synthdef_folder(server, directory, args.verbosity > 0);
     }
 #ifndef NDEBUG
-    auto end_time = chrono::high_resolution_clock::now();
+    auto end_time = std::chrono::high_resolution_clock::now();
     cout << "SynthDefs loaded in "
-         << chrono::duration_cast<chrono::milliseconds>(end_time - start_time).count()
+         << std::chrono::duration_cast<chrono::milliseconds>(end_time - start_time).count()
          << " ms"
          << endl;
 #endif
@@ -352,6 +357,11 @@ int main(int argc, char * argv[])
 
     server_arguments::initialize(argc, argv);
     server_arguments const & args = server_arguments::instance();
+
+    if(args.dump_version){
+        cout << "supernova " << SC_VersionString() << endl;
+        return 0;
+    }
 
     rt_pool.init(args.rt_pool_size * 1024, args.memory_locking);
     lock_memory(args);
