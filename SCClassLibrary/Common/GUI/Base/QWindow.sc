@@ -71,7 +71,8 @@ TopView : View {
 	doDrawFunc { window.drawFunc.value(window) }
 }
 
-Window {
+Window
+{
 	classvar <allWindows, <>initAction;
 
 	var resizable, <drawFunc;

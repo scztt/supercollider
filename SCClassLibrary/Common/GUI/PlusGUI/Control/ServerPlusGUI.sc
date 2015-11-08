@@ -250,11 +250,8 @@
 
 		if(isLocal or: { options.remoteControlVolume }) {
 		{
-			var volSpec, currentVolume;
+			var volSpec, cpVol;
 			var volumeSlider, muteButton, muteActions, volController;
-
-			currentVolume = this.volume.volume;
-
 			muteActions = [{this.unmute}, {this.mute}];
 			volSpec = [volume.min, volume.max, \db].asSpec;
 
@@ -280,7 +277,7 @@
 
 			volumeNum = gui.numberBox.new(w, Rect(0, 0, 28, 18))
 				.font_(font)
-				.value_(currentVolume)
+				.value_(0.0)
 				.align_(\center)
 				.action_({arg me;
 					var newdb;
@@ -290,7 +287,7 @@
 					});
 
 			volumeSlider = gui.slider.new(w, Rect(0, 0, 172, 18))
-				.value_(volSpec.unmap(currentVolume).round(0.1))
+				.value_(volSpec.unmap(0))
 				.onClose_{volController.remove}
 				.action_({arg me;
 					var newdb;
@@ -328,7 +325,7 @@
 		}.value;
 		};
 
-		w.front;
+ 		w.front;
 
 		ctlr = SimpleController(this)
 			.put(\serverRunning, {	if(serverRunning,running,stopped) })

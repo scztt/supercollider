@@ -166,7 +166,7 @@ QString Document::pathAsSCArrayOfCharCodes()
 {
     QString path;
     if(mFilePath.isEmpty()) {
-        path = QStringLiteral("nil");
+        path = QString("nil");
     } else {
         path = mFilePath;
     }
@@ -177,11 +177,11 @@ QString Document::pathAsSCArrayOfCharCodes()
 
 QString Document::bytesToSCArrayOfCharCodes(QByteArray stringBytes)
 {
-    QString returnString = QStringLiteral("[");
+    QString returnString = QString("[");
     for (int i = 0; i < stringBytes.size(); ++i) {
         returnString = returnString.append(QString::number(static_cast<int>(stringBytes.at(i)))).append(',');
     }
-    returnString = returnString.append(QStringLiteral("]"));
+    returnString = returnString.append(QString("]"));
     return returnString;
 }
 
@@ -230,7 +230,7 @@ void Document::storeTmpFile()
     }
 
     if (mFilePath.isEmpty())
-        name = QStringLiteral("Untitled");
+        name = QString("Untitled");
     else
         name = QFileInfo(mFilePath).baseName();
 
@@ -238,10 +238,10 @@ void Document::storeTmpFile()
         tmpFilesDir.mkdir("tmp");
     tmpFilesDir.cd("tmp");
 
-    path = QStringLiteral("%1/%2.bak").arg(tmpFilesDir.absolutePath())
+    path = QString("%1/%2.bak").arg(tmpFilesDir.absolutePath())
                                .arg(name);
     while (QFile(path).exists())
-        path = QStringLiteral("%1/%2-%3.bak")
+        path = QString("%1/%2-%3.bak")
                                .arg(tmpFilesDir.absolutePath())
                                .arg(name)
                                .arg(++i);
@@ -333,10 +333,10 @@ Document *DocumentManager::open( const QString & path, int initialCursorPosition
     // strip .rtf
     bool isRTF = false;
     QString filePath = cpath;
-    if (info.suffix() == QStringLiteral("rtf")) {
+    if (info.suffix() == QString("rtf")) {
         isRTF = true;
 
-        filePath += QStringLiteral(".scd");
+        filePath += QString(".scd");
         int result = rtf2txt(bytes.data());
         bytes = bytes.left(result);
         QMessageBox::warning(NULL, QString(tr("Opening RTF File")),
@@ -345,9 +345,9 @@ Document *DocumentManager::open( const QString & path, int initialCursorPosition
 
     closeSingleUntitledIfUnmodified();
 
-    const bool fileIsPlainText = !(info.suffix() == QStringLiteral("sc") ||
-                                  (info.suffix() == QStringLiteral("scd")) ||
-                                  (info.suffix() == QStringLiteral("schelp")));
+    const bool fileIsPlainText = !(info.suffix() == QString("sc") ||
+                                  (info.suffix() == QString("scd")) ||
+                                  (info.suffix() == QString("schelp")));
 
     Document *doc = createDocument( fileIsPlainText, id );
     doc->mDoc->setPlainText( decodeDocument(bytes) );
@@ -446,7 +446,7 @@ void DocumentManager::deleteRestore()
 Document * DocumentManager::documentForId(const QByteArray docID)
 {
     Document * doc = mDocHash.value(docID);
-    if(!doc) MainWindow::instance()->showStatusMessage(QStringLiteral("Lookup failed for Document %1").arg(docID.constData()));
+    if(!doc) MainWindow::instance()->showStatusMessage(QString("Lookup failed for Document %1").arg(docID.constData()));
     return doc;
 }
 
@@ -475,11 +475,11 @@ void DocumentManager::close( Document *doc )
     Q_EMIT( closed(doc) );
 
     QString command =
-            QStringLiteral("Document.findByQUuid(\'%1\').closed")
+            QString("Document.findByQUuid(\'%1\').closed")
             .arg(doc->id().constData());
     Main::evaluateCodeIfCompiled( command, true );
 
-    doc->deleteLater();
+    delete doc;
 }
 
 bool DocumentManager::save( Document *doc )
@@ -526,26 +526,18 @@ bool DocumentManager::doSaveAs( Document *doc, const QString & path )
 
     QString str = doc->textDocument()->toPlainText();
     file.write(str.toUtf8());
-    file.flush();
     file.close();
 
     info.refresh();
 
-    const bool fileIsPlainText = !(info.suffix() == QStringLiteral("sc") ||
-                                  (info.suffix() == QStringLiteral("scd")) ||
-                                  (info.suffix() == QStringLiteral("schelp")));
-
-    // It's possible the mod time has not been updated - if it looks like that is the case,
-    // just set it one second in the future, so we don't trip the external modification alarm.
-    if (doc->mSaveTime == info.lastModified()) {
-        doc->mSaveTime = QDateTime::currentDateTime().addMSecs(1000);
-    } else {
-        doc->mSaveTime = info.lastModified();
-    }
+    const bool fileIsPlainText = !(info.suffix() == QString("sc") ||
+                                  (info.suffix() == QString("scd")) ||
+                                  (info.suffix() == QString("schelp")));
 
     doc->mFilePath = cpath;
     doc->mTitle = info.fileName();
     doc->mDoc->setModified(false);
+    doc->mSaveTime = info.lastModified();
     doc->setPlainText(fileIsPlainText);
     doc->removeTmpFile();
 
@@ -715,7 +707,7 @@ void DocumentManager::handleDocListScRequest()
 {
     QList<Document*> docs = documents();
     QList<Document*>::Iterator it;
-    QString command = QStringLiteral("Document.syncDocs([");
+    QString command = QString("Document.syncDocs([");
     for (it = docs.begin(); it != docs.end(); ++it) {
         Document * doc = *it;
         int start, range;
@@ -727,7 +719,7 @@ void DocumentManager::handleDocListScRequest()
             start = doc->initialSelectionStart();
             range = doc->initialSelectionRange();
         }
-        QString docData = QStringLiteral("[\'%1\', %2, %3, %4, %5, %6, %7],")
+        QString docData = QString("[\'%1\', %2, %3, %4, %5, %6, %7],")
             .arg(doc->id().constData())
             .arg(doc->titleAsSCArrayOfCharCodes())
             .arg(doc->textAsSCArrayOfCharCodes(0, -1))
@@ -846,7 +838,7 @@ void DocumentManager::handleGetDocTextScRequest( const QString & data )
         if(document){
             QString docText = document->textAsSCArrayOfCharCodes(start, range);
 
-            QString command = QStringLiteral("Document.executeAsyncResponse(\'%1\', %2.asAscii)").arg(funcID.c_str(), docText);
+            QString command = QString("Document.executeAsyncResponse(\'%1\', %2.asAscii)").arg(funcID.c_str(), docText);
             Main::evaluateCode ( command, true );
         }
 
@@ -902,7 +894,7 @@ void DocumentManager::handleSetDocTextScRequest( const QString & data )
                 connect(document->textDocument(), SIGNAL(contentsChange(int, int, int)), this, SLOT(updateCurrentDocContents(int, int, int)));
             }
             
-            QString command = QStringLiteral("Document.executeAsyncResponse(\'%1\')").arg(funcID.c_str());
+            QString command = QString("Document.executeAsyncResponse(\'%1\')").arg(funcID.c_str());
             Main::evaluateCode ( command, true );
         }
 
@@ -1286,7 +1278,7 @@ void DocumentManager::handleEnableTextMirrorScRequest( const QString & data )
                 Document * doc = *it;
                 Main::scProcess()->updateTextMirrorForDocument(doc, 0, -1, 0);
             }
-            QString warning = QStringLiteral("Document Text Mirror Disabled\n");
+            QString warning = QString("Document Text Mirror Disabled\n");
             Main::scProcess()->post(warning);
         }
     }
@@ -1305,7 +1297,7 @@ void DocumentManager::syncLangDocument(Document *doc)
         range = doc->initialSelectionRange();
     }
     QString command =
-            QStringLiteral("Document.syncFromIDE(\'%1\', %2, %3, %4, \'%5\', %6, %7)")
+            QString("Document.syncFromIDE(\'%1\', %2, %3, %4, \'%5\', %6, %7)")
             .arg(doc->id().constData())
             .arg(doc->titleAsSCArrayOfCharCodes())
             .arg(doc->textAsSCArrayOfCharCodes(0, -1))
@@ -1337,12 +1329,12 @@ void DocumentManager::sendActiveDocument()
     if (Main::scProcess()->state() != QProcess::Running)
         return;
     if(mCurrentDocument){
-        QString command = QStringLiteral("Document.setActiveDocByQUuid(\'%1\');").arg(mCurrentDocument->id().constData());
+        QString command = QString("Document.setActiveDocByQUuid(\'%1\');").arg(mCurrentDocument->id().constData());
         if (!mCurrentDocumentPath.isEmpty())
-            command = command.append(QStringLiteral("ScIDE.currentPath_(\"%1\");").arg(mCurrentDocumentPath));
+            command = command.append(QString("ScIDE.currentPath_(\"%1\");").arg(mCurrentDocumentPath));
         Main::evaluateCode(command, true);
     } else
-        Main::evaluateCode(QStringLiteral("ScIDE.currentPath_(nil); Document.current = nil;"), true);
+        Main::evaluateCode(QString("ScIDE.currentPath_(nil); Document.current = nil;"), true);
 }
 
 void DocumentManager::updateCurrentDocContents ( int position, int charsRemoved, int charsAdded )
@@ -1353,7 +1345,7 @@ void DocumentManager::updateCurrentDocContents ( int position, int charsRemoved,
     
     if (mCurrentDocument->textChangedActionEnabled()) {
         QString addedChars = mCurrentDocument->textAsSCArrayOfCharCodes(position, charsAdded);
-        Main::evaluateCode(QStringLiteral("Document.findByQUuid(\'%1\').textChanged(%2, %3, %4);").arg(mCurrentDocument->id().constData()).arg(position).arg(charsRemoved).arg(addedChars), true);
+        Main::evaluateCode(QString("Document.findByQUuid(\'%1\').textChanged(%2, %3, %4);").arg(mCurrentDocument->id().constData()).arg(position).arg(charsRemoved).arg(addedChars), true);
     }
 }
 

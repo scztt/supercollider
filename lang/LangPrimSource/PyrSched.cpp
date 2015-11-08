@@ -224,16 +224,14 @@ static void syncOSCOffsetWithTimeOfDay();
 void resyncThread();
 
 // Use the highest resolution clock available for monotonic clock time
-typedef typename std::conditional<std::chrono::high_resolution_clock::is_steady,
-								  std::chrono::high_resolution_clock,
-								  std::chrono::steady_clock>::type monotonic_clock;
+typedef typename std::conditional<chrono::high_resolution_clock::is_steady, chrono::high_resolution_clock, chrono::steady_clock>::type monotonic_clock;
 
-static std::chrono::high_resolution_clock::time_point hrTimeOfInitialization;
+static chrono::high_resolution_clock::time_point hrTimeOfInitialization;
 
 template <typename DurationType>
 inline double DurToFloat(DurationType dur)
 {
-	using namespace std::chrono;
+	using namespace chrono;
 	seconds secs         = duration_cast<seconds>(dur);
 	nanoseconds nanosecs = dur - secs;
 
@@ -242,8 +240,8 @@ inline double DurToFloat(DurationType dur)
 
 SCLANG_DLLEXPORT_C void schedInit()
 {
-	using namespace std::chrono;
-	hrTimeOfInitialization     = high_resolution_clock::now();
+	using namespace chrono;
+    hrTimeOfInitialization     = high_resolution_clock::now();
 
 	syncOSCOffsetWithTimeOfDay();
 	thread thread(resyncThread);
@@ -259,7 +257,7 @@ SCLANG_DLLEXPORT_C void schedCleanup()
 
 double elapsedTime()
 {
-return DurToFloat(std::chrono::high_resolution_clock::now() - hrTimeOfInitialization);
+return DurToFloat(chrono::high_resolution_clock::now() - hrTimeOfInitialization);
 }
 
 double monotonicClockTime()
@@ -277,7 +275,7 @@ double OSCToElapsedTime(int64 oscTime)
 	return (double)(oscTime - gElapsedOSCoffset) * kOSCtoSecs;
 }
 
-void ElapsedTimeToChrono(double elapsed, std::chrono::system_clock::time_point & out_time_point)
+void ElapsedTimeToChrono(double elapsed, chrono::system_clock::time_point & out_time_point)
 {
 	int64 oscTime = ElapsedTimeToOSC(elapsed);
 
@@ -285,7 +283,7 @@ void ElapsedTimeToChrono(double elapsed, std::chrono::system_clock::time_point &
 	int32 nano_secs = (int32)((oscTime & 0xFFFFFFFF) * kOSCtoNanos);
 
 
-	using namespace std::chrono;
+	using namespace chrono;
 #if 0 // TODO: check system_clock precision
 	system_clock::time_point time_point = system_clock::time_point(seconds(secs) + nanoseconds(nano_secs));
 #else
@@ -308,10 +306,10 @@ void syncOSCOffsetWithTimeOfDay()
 	// Then if this machine is synced via NTP, we are synced with the world.
 	// more accurate way to do this??
 
-	using namespace std::chrono;
+    using namespace chrono;
 	struct timeval tv;
 
-	nanoseconds systemTimeBefore, systemTimeAfter;
+    nanoseconds systemTimeBefore, systemTimeAfter;
 	int64 diff, minDiff = 0x7fffFFFFffffFFFFLL;
 
 	// take best of several tries
@@ -397,7 +395,7 @@ void post(const char *fmt, ...);
 void resyncThread()
 {
 	while (true) {
-		std::this_thread::sleep_for(std::chrono::seconds(20));
+		this_thread::sleep_for(chrono::seconds(20));
 
 		syncOSCOffsetWithTimeOfDay();
 		gElapsedOSCoffset = (int64)(gHostStartNanos * kNanosToOSC) + gHostOSCoffset;
@@ -408,7 +406,6 @@ extern bool gTraceInterpreter;
 
 static void schedRunFunc()
 {
-	using namespace std::chrono;
 	unique_lock<timed_mutex> lock(gLangMutex);
 
 	VMGlobals *g = gMainVMGlobals;
@@ -429,13 +426,13 @@ static void schedRunFunc()
 		//postfl("wait until an event is ready\n");
 
 		// wait until an event is ready
-		high_resolution_clock::duration schedSecs;
-		high_resolution_clock::time_point now, schedPoint;
+        chrono::high_resolution_clock::duration schedSecs;
+        chrono::high_resolution_clock::time_point now, schedPoint;
 		do {
-			now = high_resolution_clock::now();
-			schedSecs = duration_cast<high_resolution_clock::duration>(duration<double>(slotRawFloat(inQueue->slots + 1)));
-			schedPoint = hrTimeOfInitialization + schedSecs;
-			if(now >= schedPoint) break;
+            now = chrono::high_resolution_clock::now();
+            schedSecs = chrono::duration_cast<chrono::high_resolution_clock::duration>(chrono::duration<double>(slotRawFloat(inQueue->slots + 1)));
+            schedPoint = hrTimeOfInitialization + schedSecs;
+            if(now >= schedPoint) break;
 			//postfl("wait until an event is ready\n");
 			gSchedCond.wait_until(lock, schedPoint);
 			if (!gRunSched) goto leave;
@@ -446,7 +443,7 @@ static void schedRunFunc()
 
 		// perform all events that are ready
 		//postfl("perform all events that are ready\n");
-		while ((inQueue->size > 1) && now >= hrTimeOfInitialization + duration_cast<high_resolution_clock::duration>(duration<double>(slotRawFloat(inQueue->slots + 1)))) {
+		while ((inQueue->size > 1) && now >= hrTimeOfInitialization + chrono::duration_cast<chrono::high_resolution_clock::duration>(chrono::duration<double>(slotRawFloat(inQueue->slots + 1)))) {
 			double schedtime, delta;
 			PyrSlot task;
 
@@ -827,7 +824,6 @@ double TempoClock::ElapsedBeats()
 
 void* TempoClock::Run()
 {
-	using namespace std::chrono;
 	//printf("->TempoClock::Run\n");
 	unique_lock<timed_mutex> lock(gLangMutex);
 
@@ -846,17 +842,17 @@ void* TempoClock::Run()
 
 		// wait until an event is ready
 		double elapsedBeats;
-		high_resolution_clock::duration schedSecs;
-		high_resolution_clock::time_point schedPoint;
+        chrono::high_resolution_clock::duration schedSecs;
+        chrono::high_resolution_clock::time_point schedPoint;
 		do {
 			elapsedBeats = ElapsedBeats();
 			if (elapsedBeats >= slotRawFloat(mQueue->slots)) break;
 
 			//printf("event ready at %g . elapsed beats %g\n", mQueue->slots->uf, elapsedBeats);
 			double wakeTime = BeatsToSecs(slotRawFloat(mQueue->slots));
-
-			schedSecs = duration_cast<high_resolution_clock::duration>(duration<double>(wakeTime));
-			schedPoint = hrTimeOfInitialization + schedSecs;
+            
+            schedSecs = chrono::duration_cast<chrono::high_resolution_clock::duration>(chrono::duration<double>(wakeTime));
+            schedPoint = hrTimeOfInitialization + schedSecs;
 
 			//printf("wait until an event is ready. wake %g  now %g\n", wakeTime, elapsedTime());
 			mCondition.wait_until(lock, schedPoint);

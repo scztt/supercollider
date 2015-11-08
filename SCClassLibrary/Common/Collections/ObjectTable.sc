@@ -1,4 +1,5 @@
-TwoWayIdentityDictionary : Collection {
+TwoWayIdentityDictionary : Collection
+{
 	var idToObj, objToID;
 
 	*new {
@@ -50,7 +51,8 @@ UniqueID {
 	*next  { ^id = id + 1; }
 }
 
-ObjectTable : TwoWayIdentityDictionary {
+ObjectTable : TwoWayIdentityDictionary
+{
 	classvar <global;
 
 

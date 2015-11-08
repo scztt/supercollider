@@ -71,8 +71,7 @@ private:
             str(str), hash(hash)
         {}
 
-        symbol_data(symbol_data const & rhs)             = default;
-        symbol_data & operator=(symbol_data const & rhs) = default;
+        symbol_data(symbol_data const & rhs) = default;
 
         friend size_t hash_value(symbol_data const & value)
         {
@@ -124,8 +123,9 @@ private:
         typedef boost::unordered_set<symbol_data> table_type;
         typedef std::pair<table_type::const_iterator, bool> lookup_result_type;
 
-    public:
-        symbol_table(void)
+public:
+        symbol_table(void):
+            table(16384)
         {}
 
         symbol_data const & find(const char * str, size_t strlen)
@@ -153,7 +153,7 @@ private:
             return std::make_pair(it, it != table.end());
         }
 
-        table_type table = table_type(16384);
+        table_type table;
         nova::nonrecursive_rw_mutex mutex;
     };
 
@@ -169,7 +169,8 @@ private:
     }
 
 public:
-    symbol ()
+    symbol ():
+        data(NULL, 0)
     {}
 
     explicit symbol (const char * str):
@@ -184,8 +185,7 @@ public:
         data(lookup_string(str, length))
     {}
 
-    symbol (symbol const & rhs)            = default;
-    symbol & operator=(symbol const & rhs) = default;
+    symbol (symbol const & rhs) = default;
 
     const char * c_str(void) const
     {
@@ -207,7 +207,7 @@ public:
         return lhs.data.str < rhs.data.str;
     }
 
-    symbol_data data = symbol_data( nullptr, 0 );
+    symbol_data data;
 };
 
 class named_hash_entry:
@@ -317,4 +317,5 @@ struct named_hash_hash
 
 }
 
+#undef PURE
 #endif /* UTILITIES_NAMED_HASH_ENTRY_HPP */

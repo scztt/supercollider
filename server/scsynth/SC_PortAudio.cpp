@@ -155,13 +155,12 @@ static int SC_PortAudioStreamCallback( const void *input, void *output,
 
 	return driver->PortAudioCallback( input, output, frameCount, timeInfo, statusFlags );
 }
-void sc_SetDenormalFlags();
+
 int SC_PortAudioDriver::PortAudioCallback( const void *input, void *output,
 			unsigned long frameCount, const PaStreamCallbackTimeInfo* timeInfo,
 			PaStreamCallbackFlags statusFlags )
 {
-	sc_SetDenormalFlags();
-    World *world = mWorld;
+	World *world = mWorld;
 	(void) frameCount, timeInfo, statusFlags; // suppress unused parameter warnings
 #ifdef SC_PA_USE_DLL
 	mDLL.Update(sc_PAOSCTimeSeconds());

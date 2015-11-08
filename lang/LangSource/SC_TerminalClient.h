@@ -162,7 +162,7 @@ protected:
 	boost::asio::io_service mIoService;
 private:
 	boost::asio::io_service::work mWork;
-	boost::asio::basic_waitable_timer<std::chrono::system_clock> mTimer;
+	boost::asio::basic_waitable_timer<chrono::system_clock> mTimer;
 
 	// input io service
 	boost::asio::io_service mInputService;
@@ -176,7 +176,7 @@ private:
 #ifndef _WIN32
 	boost::asio::posix::stream_descriptor   mStdIn;
 #else
-	boost::asio::windows::object_handle mStdIn;
+	boost::asio::windows::stream_handle mStdIn;
 #endif
 	void startInputRead();
 	void onInputRead(const boost::system::error_code& error, std::size_t bytes_transferred);

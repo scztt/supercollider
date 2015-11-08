@@ -94,7 +94,8 @@ public:
     void initialize(class server_arguments const & args, float * control_busses);
     void reset_sampling_rate(int sr);
 
-    sc_plugin_interface(void) = default;
+    sc_plugin_interface(void)
+    {}
 
     ~sc_plugin_interface(void);
 
@@ -111,7 +112,7 @@ public:
     /* @{ */
     /* audio buffer handling */
     SndBuf* allocate_buffer(uint32_t index, uint32_t frames, uint32_t channels);
-    void allocate_buffer(SndBuf * buf, uint32_t frames, uint32_t channels, double samplerate);
+    int allocate_buffer(SndBuf * buf, uint32_t frames, uint32_t channels, double samplerate);
     void buffer_read_alloc(uint32_t index, const char * filename, uint32_t start, uint32_t frames);
     void buffer_alloc_read_channels(uint32_t index, const char * filename, uint32_t start, uint32_t frames, uint32_t channel_count,
                                     const uint32_t * channel_data);

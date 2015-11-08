@@ -23,14 +23,13 @@
 #ifndef _MsgFifo_
 #define _MsgFifo_
 
-#include <atomic>
+#include <boost/atomic.hpp>
 
 /////////////////////////////////////////////////////////////////////
 
 namespace SCMsgFifo {
 
-using std::memory_order_relaxed;
-using std::memory_order_release;
+using namespace boost;
 
 template <class MsgType, int N>
 class MsgFifo
@@ -80,7 +79,7 @@ public:
 private:
 	int NextPos(int inPos) { return (inPos + 1) & (N - 1); }
 
-	std::atomic<int> mReadHead, mWriteHead, mFreeHead;
+	atomic<int> mReadHead, mWriteHead, mFreeHead;
 	MsgType mItems[N];
 };
 
@@ -121,7 +120,7 @@ public:
 private:
 	int NextPos(int inPos) { return (inPos + 1) & (N - 1); }
 
-	std::atomic<int> mReadHead, mWriteHead;
+	atomic<int> mReadHead, mWriteHead;
 	MsgType mItems[N];
 };
 

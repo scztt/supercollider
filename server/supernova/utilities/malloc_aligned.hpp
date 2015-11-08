@@ -131,7 +131,7 @@ inline void* MALLOC malloc_aligned(std::size_t nbytes)
 {
     void* vec = malloc(nbytes+ (VECTORALIGNMENT/8-1) + sizeof(void *));
 
-    if (vec != nullptr) {
+    if (vec != NULL) {
         /* get alignment of first possible signal vector byte */
         long alignment = ((long)vec+sizeof(void *))&(VECTORALIGNMENT/8-1);
         /* calculate aligned pointer */
@@ -145,7 +145,7 @@ inline void* MALLOC malloc_aligned(std::size_t nbytes)
 
 inline void free_aligned(void *ptr)
 {
-    if (ptr == nullptr)
+    if (ptr == NULL)
         return;
 
     /* get original memory location */
@@ -214,10 +214,10 @@ public:
         return &x;
     }
 
-    pointer allocate(size_type n, const void* hint = nullptr)
+    pointer allocate(size_type n, const void* hint = 0)
     {
         pointer ret = malloc_aligned<T>(n);
-        if (ret == nullptr)
+        if (ret == 0)
             throw std::bad_alloc();
         return ret;
     }

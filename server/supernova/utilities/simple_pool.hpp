@@ -54,7 +54,7 @@ class simple_pool
         mutex_type
     {
         data(void):
-            pool(nullptr)
+            pool(0)
         {}
 
         void init(std::size_t size, bool lock)

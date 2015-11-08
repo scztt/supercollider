@@ -58,11 +58,6 @@ bool IsCmdPeriodKeyUp(void * event)
     }
     return false;
 }
-  
-bool AlwaysShowScrollbars() {
-    return ([NSScroller preferredScrollerStyle] == NSScrollerStyleLegacy);
-}
-
 
 void activateApp() {
     [NSApp activateIgnoringOtherApps:YES];

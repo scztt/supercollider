@@ -26,17 +26,16 @@
 #include <QStack>
 #include <QKeyEvent>
 #include <QStringList>
+#include <QSortFilterProxyModel>
 #include <QPointer>
 
 #include "tokens.hpp"
-#include "completion_menu.hpp"
-
-#include "SCDoc/SCDoc.h"
 
 namespace ScIDE {
 
 class ScCodeEditor;
 class TokenIterator;
+class CompletionMenu;
 class MethodCallWidget;
 
 namespace ScLanguage { struct Method; struct Class; }
@@ -60,10 +59,8 @@ private slots:
     void onContentsChange(int pos, int removed, int added);
     void onCursorChanged();
     void onCompletionMenuFinished( int result );
-    void updateCompletionMenuInfo();
     void clearMethodCallStack();
     void hideWidgets();
-    void gotoHelp(QString symbol);
 
 private:
     friend class MethodCallWidget;
@@ -134,10 +131,6 @@ private:
 
     QString tokenText( TokenIterator & it );
     QRect globalCursorRect( int cursorPosition );
-    static QString findHelpClass(QString klass);
-    static DocNode * parseHelpClass(QString file);
-    static QString parseClassElement(DocNode *node, QString element);
-    static void parseClassNode(DocNode *node, QString *str);
 
     // data
 

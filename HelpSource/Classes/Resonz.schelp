@@ -6,9 +6,7 @@ categories::  UGens>Filters>Linear
 
 Description::
 
-This is the same as  link::Classes/Ringz:: , except that it has a constant gain at 0 dB instead of being constant skirt.
-
-It is a two pole resonant filter with zeroes at
+A two pole resonant filter with zeroes at
 
 code::
 z = ±1

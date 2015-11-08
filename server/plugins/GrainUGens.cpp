@@ -1097,7 +1097,7 @@ static inline void GrainBuf_next_play_active(GrainBuf *unit, int inNumSamples)
 
 	for (int i=0; i < unit->mNumActive; ) {
 		GrainBufG *grain = unit->mGrains + i;
-		int bufnum = grain->bufnum;
+		uint32 bufnum = grain->bufnum;
 
 		GRAIN_BUF
 

@@ -53,7 +53,6 @@ GenericLookupDialog::GenericLookupDialog( QWidget * parent ):
     mPreviewEditor = new ScCodeEditor(mPreviewDocument);
     mPreviewEditor->setReadOnly(true);
     mPreviewEditor->setVisible(false);
-    mPreviewEditor->setTabChangesFocus(true);
   
     QVBoxLayout *layout = new QVBoxLayout;
     layout->setContentsMargins(0,0,0,0);
@@ -331,7 +330,7 @@ QList<QStandardItem*> GenericLookupDialog::makeDialogItem( QString const & displ
     return ret;
 }
 
-QStandardItemModel * LookupDialog::modelForClass(const QString &className, const QString &methodName)
+QStandardItemModel * LookupDialog::modelForClass(const QString &className)
 {
     const Introspection & introspection = Main::scProcess()->introspection();
     const Class *klass = introspection.findClass(className);
@@ -347,39 +346,32 @@ QStandardItemModel * LookupDialog::modelForClass(const QString &className, const
 
         QString displayPath = introspection.compactLibraryPath(klass->definition.path);
 
-        if (methodName.isEmpty()) {
-            parentItem->appendRow(makeDialogItem(klass->name.get(), displayPath,
-                                                 klass->definition.path.get(),
-                                                 klass->definition.position,
-                                                 klass->name.get(), QStringLiteral(""),
-                                                 true ));
-        }
+        parentItem->appendRow(makeDialogItem(klass->name.get(), displayPath,
+                                             klass->definition.path.get(),
+                                             klass->definition.position,
+                                             klass->name.get(), QString(""),
+                                             true ));
 
         foreach (const Method * method, metaClass->methods) {
             QString signature = method->signature( Method::SignatureWithoutArguments );
             QString displayPath = introspection.compactLibraryPath(method->definition.path);
-          
-            if (method->matches(methodName)) {
-                parentItem->appendRow(makeDialogItem( signature, displayPath,
-                                                      method->definition.path.get(),
-                                                      method->definition.position,
-                                                      metaClass->name.get(), method->name.get(),
-                                                      false ));
-            }
+
+            parentItem->appendRow(makeDialogItem( signature, displayPath,
+                                                  method->definition.path.get(),
+                                                  method->definition.position,
+                                                  metaClass->name.get(), method->name.get(),
+                                                  false ));
         }
 
         foreach (const Method * method, klass->methods) {
             QString signature = method->signature( Method::SignatureWithoutArguments );
             QString displayPath = introspection.compactLibraryPath(method->definition.path);
 
-
-            if (method->matches(methodName)) {
-                parentItem->appendRow(makeDialogItem( signature, displayPath,
-                                                      method->definition.path.get(),
-                                                      method->definition.position,
-                                                      klass->name.get(), method->name.get(),
-                                                      false ));
-            }
+            parentItem->appendRow(makeDialogItem( signature, displayPath,
+                                                  method->definition.path.get(),
+                                                  method->definition.position,
+                                                  klass->name.get(), method->name.get(),
+                                                  false ));
         }
 
         klass = klass->superClass;
@@ -467,13 +459,7 @@ QStandardItemModel * LookupDialog::modelForPartialQuery(const QString & queryStr
 
 bool LookupDialog::performClassQuery(const QString & className)
 {
-    QStandardItemModel * model;
-    if (className.contains(QChar(':'))) {
-        QStringList split = className.split(":");
-        model = modelForClass(split[0].trimmed(), split[1].trimmed());
-    } else {
-        model = modelForClass(className);
-    }
+    QStandardItemModel * model = modelForClass(className);
     setModel(model);
     return model;
 }

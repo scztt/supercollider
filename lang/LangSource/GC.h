@@ -128,7 +128,6 @@ public:
 	// when you know the child is white
 	void GCWriteNew(PyrObjectHdr* inParent, PyrObjectHdr* inChild)
 		{
-			assert(IsWhite(inChild));
 			if (IsBlack(inParent)) {
 				ToGrey(inChild);
 			}
@@ -323,12 +322,12 @@ inline void PyrGC::ToGrey2(PyrObjectHdr* obj)
 	mNumGrey ++ ;
 }
 
-inline PyrObject * PyrGC::Allocate(size_t inNumBytes, int32 sizeclass, bool inRunCollection)
+inline PyrObject * PyrGC::Allocate(size_t inNumBytes, int32 sizeclass, bool inCollect)
 {
-	if (inRunCollection && mNumToScan >= kScanThreshold)
+	if (inCollect && mNumToScan >= kScanThreshold)
 		Collect();
 	else {
-		if (inRunCollection)
+		if (inCollect)
 			mUncollectedAllocations = 0;
 		else
 			++mUncollectedAllocations;

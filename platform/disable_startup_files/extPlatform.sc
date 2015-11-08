@@ -1,3 +1,4 @@
 + Platform {
-	loadStartupFiles {^this}
+    loadStartupFiles {^this}
 }
+

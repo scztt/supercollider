@@ -66,16 +66,16 @@ public:
         return &x;
     }
 
-    pointer allocate(size_type size, const void* hint = nullptr)
+    pointer allocate(size_type size, const void* hint = 0)
     {
         pointer ret = static_cast<pointer>(rt_pool.malloc(size * sizeof(T)));
-        if (ret == nullptr)
+        if (ret == NULL)
             throw std::bad_alloc();
 
         return ret;
     }
 
-    pointer reallocate(pointer p, size_type size, void* hint = nullptr)
+    pointer reallocate(pointer p, size_type size, void* hint = 0)
     {
         return static_cast<pointer>(rt_pool.realloc(p, size));
     }

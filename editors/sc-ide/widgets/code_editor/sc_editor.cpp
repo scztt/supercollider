@@ -84,11 +84,9 @@ bool ScCodeEditor::event( QEvent *e )
         QKeyEvent *ke = static_cast<QKeyEvent*>(e);
         switch (ke->key()) {
         case Qt::Key_Tab:
-            if (!tabChangesFocus()) {
-                indent();
-                e->accept();
-                return true;
-            }
+            indent();
+            e->accept();
+            return true;
         default:
             break;
         }
@@ -174,15 +172,8 @@ void ScCodeEditor::keyPressEvent( QKeyEvent *e )
     {
         QTextBlock cursorBlock = cursor.block();
         int cursorPosInBlock = cursor.position() - cursorBlock.position();
-        
-        TokenIterator prevToken = TokenIterator::leftOf(cursorBlock, cursorPosInBlock);
         TokenIterator nextToken = TokenIterator::rightOf(cursorBlock, cursorPosInBlock);
-        
-        if (   nextToken.block() == cursorBlock
-            && nextToken.type() == Token::ClosingBracket
-            && prevToken.type() != Token::ClosingBracket // no double-newline if cursor is between closing brackets, i.e. ])
-            && !(prevToken.block().firstLineNumber() < nextToken.block().firstLineNumber()) // no double-nl if only whitespace to the left
-        )
+        if ( nextToken.block() == cursorBlock && nextToken.type() == Token::ClosingBracket )
         {
             cursor.beginEditBlock();
             cursor.insertBlock();
@@ -867,7 +858,7 @@ static bool isSingleLineComment(QTextCursor const & selection)
 static bool isSelectionComment(QString const & text)
 {
     QString trimmed = text.trimmed();
-    if ( trimmed.startsWith(QStringLiteral("/*")) && trimmed.endsWith(QStringLiteral("*/")) )
+    if ( trimmed.startsWith(QString("/*")) && trimmed.endsWith(QString("*/")) )
         return true;
     else
         return false;
@@ -901,7 +892,7 @@ void ScCodeEditor::addSingleLineComment(QTextCursor cursor, int indentation)
     cursor.movePosition(QTextCursor::StartOfBlock);
     cursor.setPosition(cursor.position() + indentedStartOfLine(currentBlock), QTextCursor::KeepAnchor);
 
-    QString commentString = makeIndentationString(indentation) + QStringLiteral("// ")
+    QString commentString = makeIndentationString(indentation) + QString("// ")
                             + makeIndentationString(blockIndentationLevel - indentation);
 
     cursor.insertText(commentString);
@@ -920,9 +911,9 @@ void ScCodeEditor::removeSingleLineComment(QTextCursor cursor)
     cursor.setPosition(commentStartPosition);
     cursor.setPosition(commentStartPosition + 3, QTextCursor::KeepAnchor);
 
-    if (!cursor.selectedText().endsWith(QStringLiteral("// "))) {
+    if (!cursor.selectedText().endsWith(QString("// "))) {
         cursor.setPosition(commentStartPosition + 2, QTextCursor::KeepAnchor);
-        if (!cursor.selectedText().endsWith(QStringLiteral("//")))
+        if (!cursor.selectedText().endsWith(QString("//")))
             return;
     }
 
@@ -1004,7 +995,7 @@ void ScCodeEditor::toggleCommentSelection()
             selectionText.chop(2);
             selectionCursor.insertText(selectionText);
         } else {
-            selectionText = QStringLiteral("/*") + selectionText + QStringLiteral("*/");
+            selectionText = QString("/*") + selectionText + QString("*/");
             selectionCursor.insertText(selectionText);
         }
 

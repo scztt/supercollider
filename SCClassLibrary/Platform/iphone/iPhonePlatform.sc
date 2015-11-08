@@ -1,4 +1,5 @@
-IPhonePlatform : UnixPlatform {
+IPhonePlatform : UnixPlatform
+{
 	initPlatform {
 		super.initPlatform;
 	}
@@ -31,6 +32,7 @@ IPhonePlatform : UnixPlatform {
 
 		// only osx uses Cocoa guis
 	defaultGUIScheme { ^\iphone }
+	defaultHIDScheme { ^\osx_hid }
 
 	open {|aPath|
 		("open " ++ aPath.escapeChar($ )).systemCmd

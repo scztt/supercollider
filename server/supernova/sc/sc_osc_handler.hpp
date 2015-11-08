@@ -23,13 +23,9 @@
 #include <mutex>
 #include <vector>
 
-#ifndef BOOST_ASIO_HAS_STD_ARRAY
 #ifdef __clang__ // clang workaround
 #define BOOST_ASIO_HAS_STD_ARRAY
 #endif
-#endif
-
-#include <boost/asio/ip/tcp.hpp>
 
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/date_time/microsec_time_clock.hpp>
@@ -77,7 +73,7 @@ public:
     }
 
 private:
-    void send(const char * data, size_t length) override;
+    void send(const char * data, size_t length);
 
     udp::endpoint endpoint_;
 };
@@ -220,6 +216,7 @@ class sc_osc_handler:
 public:
     sc_osc_handler(server_arguments const & args):
         sc_notify_observers(detail::network_thread::io_service_),
+        dump_osc_packets(0), error_posting(1), quit_received(false),
         tcp_acceptor_(detail::network_thread::io_service_),
         tcp_password_(args.server_password.size() ? args.server_password.c_str() : nullptr)
     {
@@ -255,7 +252,7 @@ public:
         static received_packet * alloc_packet(const char * data, size_t length,
                                               endpoint_ptr const & remote_endpoint);
 
-        void run(void) override;
+        void run(void);
 
         const char * const data;
         const size_t length;
@@ -301,7 +298,7 @@ public:
             : socket_(io_service)
         {}
 
-        void send(const char *data, size_t length) override;
+        void send(const char *data, size_t length);
 
         void async_read_msg_size();
         void handle_message_size();
@@ -326,7 +323,7 @@ public:
     }
 
 private:
-    int dump_osc_packets = 0;
+    int dump_osc_packets;
 
     /* @{ */
 public:
@@ -338,7 +335,7 @@ public:
     }
 
 private:
-    int error_posting = 1;
+    int error_posting;
     /* @} */
 
     /* @{ */
@@ -379,13 +376,7 @@ public:
         last = now;
         now += diff;
     }
-	
-    void set_last_now(time_tag const & lasts, time_tag const & nows)
-    {
-        now = nows;
-        last = lasts;
-    }
-	
+
     void update_time_from_system(void)
     {
         now = time_tag::from_ptime(boost::date_time::microsec_clock<boost::posix_time::ptime>::universal_time());
@@ -407,7 +398,7 @@ public:
                                  AsyncStageFn stage2, AsyncStageFn stage3, AsyncStageFn stage4, AsyncFreeFn cleanup,
                                  int completionMsgSize, void* completionMsgData);
 
-    bool quit_received = false;
+    bool quit_received;
 
 private:
     /* @{ */

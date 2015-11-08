@@ -22,7 +22,7 @@ LevelIndicator : View {
 	}
 
 	style_ {arg val;
-		this.setProperty(\style, QLevelIndicatorStyle(val));
+		this.setProperty(\style, val);
 	}
 
 	stepWidth_{arg val;
@@ -32,15 +32,8 @@ LevelIndicator : View {
 	background { ^this.getProperty(\grooveColor) }
 	background_ { arg color; this.setProperty(\grooveColor, color) }
 
-	meterColor_{ |color| this.setProperty(\meterColor, color) }
-	warningColor_{ |color| this.setProperty(\warningColor, color) }
-	criticalColor_{ |color| this.setProperty(\criticalColor, color) }
-
 	numSteps_ {arg val;
-		var stepWidth, length = max(this.bounds.width, this.bounds.height);
-		stepWidth = length / val;
-		stepWidth = stepWidth - (stepWidth < 3).if(1, 2);
-		this.stepWidth = stepWidth;
+		this.nonimpl("numSteps");
 	}
 
 	image_ {arg image;

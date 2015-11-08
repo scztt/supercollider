@@ -139,12 +139,12 @@ void* sc_dbg_zalloc(size_t n, size_t size, const char* tag, int line)
 }
 
 # if SC_DEBUG_MEMORY
-#  define malloc_alig(size)			sc_dbg_malloc((size), __FUNCTION__, __LINE__)
-#  define free_alig(ptr)				sc_dbg_free((ptr), __FUNCTION__, __LINE__)
+#  define malloc(size)			sc_dbg_malloc((size), __FUNCTION__, __LINE__)
+#  define free(ptr)				sc_dbg_free((ptr), __FUNCTION__, __LINE__)
 #  define zalloc_(n, size)		sc_dbg_zalloc((n), (size), __FUNCTION__, __LINE__)
 # else
-#  define malloc_alig(size)			sc_malloc((size))
-#  define free_alig(ptr)				sc_free((ptr))
+#  define malloc(size)			sc_malloc((size))
+#  define free(ptr)				sc_free((ptr))
 #  define zalloc_(n, size)		sc_zalloc((n), (size))
 # endif // SC_DEBUG_MEMORY
 
@@ -155,7 +155,7 @@ void* zalloc(size_t n, size_t size)
 
 void zfree(void * ptr)
 {
-	return free_alig(ptr);
+	return free(ptr);
 }
 
 
@@ -478,7 +478,7 @@ World* World_New(WorldOptions *inOptions)
 		scsynth::startAsioThread();
 	} catch (std::exception& exc) {
 		scprintf("Exception in World_New: %s\n", exc.what());
-		World_Cleanup(world,true);
+		World_Cleanup(world);
 		return 0;
 	} catch (...) {
 	}
@@ -504,8 +504,8 @@ int World_CopySndBuf(World *world, uint32 index, SndBuf *outBuf, bool onlyIfChan
 			uint32 bufSize = buf->samples * sizeof(float);
 			if (buf->samples != outBuf->samples)
 			{
-				free_alig(outBuf->data);
-				outBuf->data = (float*)malloc_alig(bufSize);
+				free(outBuf->data);
+				outBuf->data = (float*)malloc(bufSize);
 			}
 			memcpy(outBuf->data, buf->data, bufSize);
 			outBuf->channels 	= buf->channels;
@@ -516,7 +516,7 @@ int World_CopySndBuf(World *world, uint32 index, SndBuf *outBuf, bool onlyIfChan
 		}
 		else
 		{
-			free_alig(outBuf->data);
+			free(outBuf->data);
 			outBuf->data = 0;
 			outBuf->channels 	= 0;
 			outBuf->samples 	= 0;
@@ -758,15 +758,15 @@ Bail:
 	}
 
 	free(packet.mData);
-	World_Cleanup(world,true);
+	World_Cleanup(world);
 }
 #endif   // !NO_LIBSNDFILE
 
-void World_WaitForQuit(struct World *inWorld, bool unload_plugins)
+void World_WaitForQuit(struct World *inWorld)
 {
 	try {
 		inWorld->hw->mQuitProgram->wait();
-		World_Cleanup(inWorld, unload_plugins);
+		World_Cleanup(inWorld);
 	} catch (std::exception& exc) {
 		scprintf("Exception in World_WaitForQuit: %s\n", exc.what());
 	} catch (...) {
@@ -994,7 +994,7 @@ void World_Start(World *inWorld)
 	for (uint32 i=0; i<inWorld->mNumAudioBusChannels; ++i) inWorld->mAudioBusTouched[i] = -1;
 	for (uint32 i=0; i<inWorld->mNumControlBusChannels; ++i) inWorld->mControlBusTouched[i] = -1;
 
-	inWorld->hw->mWireBufSpace = (float*)malloc_alig(inWorld->hw->mMaxWireBufs * inWorld->mBufLength * sizeof(float));
+	inWorld->hw->mWireBufSpace = (float*)sc_malloc(inWorld->hw->mMaxWireBufs * inWorld->mBufLength * sizeof(float));
 
 	inWorld->hw->mTriggers.MakeEmpty();
 	inWorld->hw->mNodeMsgs.MakeEmpty();
@@ -1002,15 +1002,12 @@ void World_Start(World *inWorld)
 	inWorld->mRunning = true;
 }
 
-void World_Cleanup(World *world, bool unload_plugins)
+void World_Cleanup(World *world)
 {
 	if (!world) return;
 
 	scsynth::stopAsioThread();
-    
-    if(unload_plugins)
-        deinitialize_library();
-    
+
 	HiddenWorld *hw = world->hw;
 
 	if (hw && world->mRealTime) hw->mAudioDriver->Stop();
@@ -1034,8 +1031,8 @@ void World_Cleanup(World *world, bool unload_plugins)
 		SndBuf *nrtbuf = world->mSndBufsNonRealTimeMirror + i;
 		SndBuf * rtbuf = world->mSndBufs + i;
 
-		if (nrtbuf->data) free_alig(nrtbuf->data);
-		if (rtbuf->data && rtbuf->data != nrtbuf->data) free_alig(rtbuf->data);
+		if (nrtbuf->data) free(nrtbuf->data);
+		if (rtbuf->data && rtbuf->data != nrtbuf->data) free(rtbuf->data);
 
 #ifndef NO_LIBSNDFILE
 		if (nrtbuf->sndfile) sf_close(nrtbuf->sndfile);
@@ -1043,16 +1040,16 @@ void World_Cleanup(World *world, bool unload_plugins)
 #endif
 	}
 
-	free_alig(world->mSndBufsNonRealTimeMirror);
-	free_alig(world->mSndBufs);
+	free(world->mSndBufsNonRealTimeMirror);
+	free(world->mSndBufs);
 
-	free_alig(world->mControlBusTouched);
-	free_alig(world->mAudioBusTouched);
+	free(world->mControlBusTouched);
+	free(world->mAudioBusTouched);
 	if (hw->mShmem) {
 		delete hw->mShmem;
 	} else
-		free_alig(world->mControlBus);
-	free_alig(world->mAudioBus);
+		free(world->mControlBus);
+	free(world->mAudioBus);
 	delete [] world->mRGen;
 	if (hw) {
 
@@ -1061,16 +1058,16 @@ void World_Cleanup(World *world, bool unload_plugins)
 		if (hw->mNRTOutputFile) sf_close(hw->mNRTOutputFile);
 		if (hw->mNRTCmdFile) fclose(hw->mNRTCmdFile);
 #endif
-		free_alig(hw->mUsers);
-        free_alig(hw->mClientIDs);
+		free(hw->mUsers);
+        free(hw->mClientIDs);
         delete hw->mClientIDdict;
 		delete hw->mNodeLib;
 		delete hw->mGraphDefLib;
 		delete hw->mQuitProgram;
 		delete hw->mAllocPool;
-		free_alig(hw);
+		free(hw);
 	}
-	free_alig(world);
+	free(world);
 }
 
 

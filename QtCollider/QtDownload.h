@@ -23,8 +23,8 @@
 
 #include <QObject>
 #include <QString>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
+#include <QtNetwork/QNetworkAccessManager>
+#include <QtNetwork/QNetworkReply>
 
 
 class QtDownload : public QObject {

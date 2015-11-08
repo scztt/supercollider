@@ -98,7 +98,8 @@ Point {
 }
 
 
-PointArray : Point {
+PointArray : Point
+{
 	*new { arg n;
 		^super.new(Signal.new(n), Signal.new(n))
 	}

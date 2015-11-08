@@ -49,7 +49,7 @@
 #include "SC_DirUtils.h"
 #include "SC_Version.hpp"
 
-#ifdef _WIN32
+#ifdef SC_WIN32
 # include <direct.h>
 #else
 # include <sys/param.h>
@@ -2082,7 +2082,7 @@ private:
 		PyrMethod *meth = slotRawMethod(&frame->method);
 		PyrMethodRaw * methraw = METHRAW(meth);
 
-		PyrObject* debugFrameObj = instantiateObject(g->gc, getsym("DebugFrame")->u.classobj, 0, false, false);
+		PyrObject* debugFrameObj = instantiateObject(g->gc, getsym("DebugFrame")->u.classobj, 0, false, true);
 		SetObject(outSlot, debugFrameObj);
 
 		SetObject(debugFrameObj->slots + 0, meth);
@@ -2956,9 +2956,9 @@ void switchToThread(VMGlobals *g, PyrThread *newthread, int oldstate, int *numAr
 }
 
 void initPyrThread(VMGlobals *g, PyrThread *thread, PyrSlot *func, int stacksize, PyrInt32Array* rgenArray,
-	double beats, double seconds, PyrSlot* clock, bool runGC);
+	double beats, double seconds, PyrSlot* clock, bool collect);
 void initPyrThread(VMGlobals *g, PyrThread *thread, PyrSlot *func, int stacksize, PyrInt32Array* rgenArray,
-	double beats, double seconds, PyrSlot* clock, bool runGC)
+	double beats, double seconds, PyrSlot* clock, bool collect)
 {
 	PyrObject *array;
 	PyrGC* gc = g->gc;
@@ -2966,9 +2966,9 @@ void initPyrThread(VMGlobals *g, PyrThread *thread, PyrSlot *func, int stacksize
 	slotCopy(&thread->func, func);
 	gc->GCWrite(thread, func);
 
-	array = newPyrArray(gc, stacksize, 0, runGC);
+	array = newPyrArray(gc, stacksize, 0, collect);
 	SetObject(&thread->stack, array);
-	gc->GCWriteNew(thread, array); // we know array is white so we can use GCWriteNew
+	gc->GCWrite(thread, array);
 
 	SetInt(&thread->state, tInit);
 
@@ -3065,7 +3065,7 @@ int prThreadRandSeed(struct VMGlobals *g, int numArgsPushed)
 		g->rgen = (RGen*)(rgenArray->i);
 	}
 	SetObject(&thread->randData, rgenArray);
-	g->gc->GCWriteNew(thread, rgenArray); // we know rgenArray is white so we can use GCWriteNew
+	g->gc->GCWrite(thread, rgenArray);
 
 	return errNone;
 }
@@ -3459,13 +3459,10 @@ static int prLanguageConfig_getLibraryPaths(struct VMGlobals * g, int numArgsPus
 	size_t numberOfPaths = dirVector.size();
 	PyrObject * resultArray = newPyrArray(g->gc, numberOfPaths, 0, true);
 	SetObject(result, resultArray);
+	resultArray->size = numberOfPaths;
 
-	for (size_t i = 0; i != numberOfPaths; ++i) {
-		PyrString * pyrString = newPyrString(g->gc, dirVector[i].c_str(), 0, true);
-		SetObject(resultArray->slots + i, pyrString);
-		g->gc->GCWriteNew( resultArray,  pyrString ); // we know pyrString is white so we can use GCWriteNew
-		resultArray->size++;
-	}
+	for (size_t i = 0; i != numberOfPaths; ++i)
+		SetObject(resultArray->slots + i, newPyrString(g->gc, dirVector[i].c_str(), 0, true));
 	return errNone;
 }
 
@@ -3529,19 +3526,6 @@ static int prLanguageConfig_removeIncludePath(struct VMGlobals * g, int numArgsP
 static int prLanguageConfig_removeExcludePath(struct VMGlobals * g, int numArgsPushed)
 {
 	return prLanguageConfig_removeLibraryPath(g, numArgsPushed, excludePaths);
-}
-
-static int prLanguageConfig_getCurrentConfigPath(struct VMGlobals * g, int numArgsPushed)
-{
-	PyrSlot *a = g->sp;
-	PyrString* str = newPyrString(g->gc, gLanguageConfig->getCurrentConfigPath(), 0, false);
-    if(str->size == 0) {
-        SetNil(a);
-    } else {
-        SetObject(a, str);
-    }
-    
-	return errNone;
 }
 
 static int prLanguageConfig_writeConfigFile(struct VMGlobals * g, int numArgsPushed)
@@ -4161,7 +4145,6 @@ void initPrimitives()
 	definePrimitive(base, index++, "_MainOverwriteMsg", prOverwriteMsg, 1, 0);
 
 	definePrimitive(base, index++, "_AppClock_SchedNotify", prAppClockSchedNotify, 1, 0);
-	definePrimitive(base, index++, "_LanguageConfig_getCurrentConfigPath", prLanguageConfig_getCurrentConfigPath, 1, 0);
 	definePrimitive(base, index++, "_LanguageConfig_getIncludePaths", prLanguageConfig_getIncludePaths, 1, 0);
 	definePrimitive(base, index++, "_LanguageConfig_getExcludePaths", prLanguageConfig_getExcludePaths, 1, 0);
 	definePrimitive(base, index++, "_LanguageConfig_addIncludePath", prLanguageConfig_addIncludePath, 2, 0);
@@ -4247,12 +4230,12 @@ void initMIDIPrimitives();
 	initMIDIPrimitives();
 #endif
 
-#if !defined(_WIN32) && !defined(SC_IPHONE) && !defined(__OpenBSD__) && !defined(__NetBSD__) && !defined(__APPLE__)
+#if !defined(SC_WIN32) && !defined(SC_IPHONE) && !defined(__OpenBSD__) && !defined(__NetBSD__) && !defined(__APPLE__)
 void initLIDPrimitives();
 	initLIDPrimitives();
 #endif
 
-#if !defined(_WIN32) && !defined(SC_IPHONE) && !defined(__OpenBSD__) && !defined(__NetBSD__)
+#if !defined(SC_WIN32) && !defined(SC_IPHONE) && !defined(__OpenBSD__) && !defined(__NetBSD__)
 
 void initSerialPrimitives();
 	initSerialPrimitives();
@@ -4297,11 +4280,6 @@ void deinitPrimitives()
 {
 	void deinitHIDAPIPrimitives();
 	deinitHIDAPIPrimitives();
-
-#if defined(HAVE_PORTMIDI) || defined(HAVE_ALSA)
-void deinitMIDIPrimitives();
-	deinitMIDIPrimitives();
-#endif
 
 }
 

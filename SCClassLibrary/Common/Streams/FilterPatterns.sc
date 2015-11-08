@@ -575,7 +575,7 @@ Pbindf : FilterPattern {
 						^outevent
 					};
 					name.do { arg key, i;
-						outevent.put(key, streamout[i].processRest(outevent));
+						outevent.put(key, streamout[i]);
 					};
 				}{
 					outevent.put(name, streamout);

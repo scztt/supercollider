@@ -34,8 +34,8 @@ namespace ScIDE { namespace Settings {
 
 int legacyTheme(Manager * settings)
 {
-    QString group = QStringLiteral("IDE/editor/colors/");
-    QString newGroup = QStringLiteral("IDE/editor/themes/My old theme/");
+    QString group = QString("IDE/editor/colors/");
+    QString newGroup = QString("IDE/editor/themes/My old theme/");
 
     if (!settings->contains(group + "evaluatedCode"))
         return 0;
@@ -56,7 +56,7 @@ int legacyTheme(Manager * settings)
     }
     settings->remove(group);
 
-    group = QStringLiteral("IDE/editor/highlighting/");
+    group = QString("IDE/editor/highlighting/");
     keys.clear();
 
     keys << "keyword" << "built-in" << "env-var" << "class" << "number"
@@ -108,7 +108,7 @@ void Theme::fillDefault()
     addToTheme(mFormats, "searchResult",
                appPlt.color(QPalette::HighlightedText).darker(200),
                appPlt.color(QPalette::Highlight).darker(200));
-    addToTheme(mFormats, "matchingBrackets", QColor("#2bc93d"), Qt::yellow, true);
+    addToTheme(mFormats, "matchingBrackets", QColor("#ffff7f"), Qt::red, true);
     addToTheme(mFormats, "mismatchedBrackets", Qt::white, QColor(150,0,0));
     addToTheme(mFormats, "evaluatedCode", Qt::black, QColor("#F8A200"));
 
@@ -144,37 +144,9 @@ void Theme::fillDefault()
     addToTheme(mFormats, "postwindowemphasis", Qt::black, Qt::transparent, true);
 }
 
-void Theme::fillDark()
-{
-    addToTheme(mFormats, "text", QColor("#e4e4e4"), Qt::black);
-    addToTheme(mFormats, "currentLine", QColor("#e4e4e4"), QColor("#393939"));
-    addToTheme(mFormats, "searchResult", QColor("#e4e4e4"), QColor("#194c7f"));
-    addToTheme(mFormats, "matchingBrackets", QColor("#ff5500"), QColor("#95e000"), true);
-    addToTheme(mFormats, "mismatchedBrackets", QColor("#ffaa00"), QColor("#ff0000"));
-    addToTheme(mFormats, "evaluatedCode", QColor("#e4e4e4"), QColor("#aaaaff"));
-    addToTheme(mFormats, "whitespace", QColor("#e4e4e4"));
-    addToTheme(mFormats, "keyword", QColor("#aaaaff"), Qt::transparent, true);
-    addToTheme(mFormats, "built-in", QColor("#ffaaff"));
-    addToTheme(mFormats, "env-var", QColor("#55aa7f"));
-    addToTheme(mFormats, "class", QColor("#00aaff"), Qt::transparent, true);
-    addToTheme(mFormats, "number", QColor("#aa00ff"));
-    addToTheme(mFormats, "symbol", QColor("#555500"));
-    addToTheme(mFormats, "string", QColor("#5f5f5f"));
-    addToTheme(mFormats, "char", QColor("#ff55ff"));
-    addToTheme(mFormats, "comment", QColor("#aa9569"));
-    addToTheme(mFormats, "primitive", QColor("#aaff7f"));
-    addToTheme(mFormats, "lineNumbers", QColor("#676767"));
-    addToTheme(mFormats, "selection", QColor("#ff5500"));
-    addToTheme(mFormats, "postwindowtext", QColor("#e4e4e4"));
-    addToTheme(mFormats, "postwindowerror", QColor(209, 28, 36));
-    addToTheme(mFormats, "postwindowwarning", QColor(165, 119, 6));
-    addToTheme(mFormats, "postwindowsuccess", QColor(115, 138, 5));
-    addToTheme(mFormats, "postwindowemphasis", QColor("#e4e4e4"), Qt::transparent, true);
-}
-
 void Theme::fillUser(const QString & name, const Manager *settings)
 {
-    QString group = QStringLiteral("IDE/editor/themes/%1/").arg(name);
+    QString group = QString("IDE/editor/themes/%1/").arg(name);
 
     if (!settings->contains(group + "whitespace")) {
         qDebug() << "Failed to find theme" << name << settings->group();
@@ -206,9 +178,6 @@ Theme::Theme(const QString & _name, Manager * settings)
     if (mName == "default") {
         fillDefault();
         mLocked = true;
-    } else if (mName == "dark") {
-        fillDark();
-        mLocked = true;
     } else {
         fillUser(mName, settings);
         mLocked = false;
@@ -224,8 +193,6 @@ Theme::Theme(const QString & _name, const QString & _source, Manager * settings)
 
     if (_source == "default") {
         fillDefault();
-    } else if (_source == "dark") {
-        fillDark();
     } else {
         fillUser(_source, settings);
     }
@@ -241,6 +208,7 @@ Theme::~Theme()
 void Theme::setFormat(const QString & key, const QTextCharFormat & newFormat)
 {
     QMap<QString, QTextCharFormat *>::iterator i = mFormats.find(key);
+    QTextCharFormat *format = i.value();
     bool fontWeight = (newFormat.fontWeight() == QFont::Bold) ? true : false;
     QColor bg = (newFormat.background() == Qt::NoBrush) ?
                     QColor(Qt::transparent): newFormat.background().color();
@@ -275,7 +243,6 @@ QList<QString> Theme::availableThemes()
     QList<QString> themes;
 
     themes.append("default");
-    themes.append("dark");
 
     mSettings->beginGroup("IDE/editor/themes");
     themes.append(mSettings->childGroups());
@@ -290,7 +257,7 @@ void Theme::save()
         return;
 
     QMap<QString, QTextCharFormat *>::const_iterator i = mFormats.begin();
-    QString group = QStringLiteral("IDE/editor/themes/").append(mName);
+    QString group = QString("IDE/editor/themes/").append(mName);
 
     mSettings->beginGroup(group);
     while (i != mFormats.end()) {
@@ -307,7 +274,7 @@ void Theme::remove()
         return;
 
     QMap<QString, QTextCharFormat *>::const_iterator i = mFormats.begin();
-    QString key = QStringLiteral("IDE/editor/themes/").append(mName);
+    QString key = QString("IDE/editor/themes/").append(mName);
 
     mSettings->remove(key);
 }

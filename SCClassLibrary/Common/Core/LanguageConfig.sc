@@ -4,10 +4,6 @@ LanguageConfig {
 		^this.primitiveFailed
 	}
 
-	*currentPath {
-		_LanguageConfig_getCurrentConfigPath
-	}
-
 	*includePaths {
 		_LanguageConfig_getIncludePaths
 	}

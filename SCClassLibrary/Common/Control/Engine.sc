@@ -1,5 +1,5 @@
-
-NodeIDAllocator {
+NodeIDAllocator
+{
 	var <user, initTemp, temp, perm, mask, permFreed;
 	// support 32 users
 
@@ -38,14 +38,16 @@ NodeIDAllocator {
 }
 
 
-PowerOfTwoBlock {
+PowerOfTwoBlock
+{
 	var <address, <size, <>next;
 	*new { arg address, size;
 		^super.newCopyArgs(address, size)
 	}
 }
 
-PowerOfTwoAllocator {
+PowerOfTwoAllocator
+{
 	// THIS IS THE RECOMMENDED ALLOCATOR FOR BUSES AND BUFFERS
 	var size, array, freeLists, pos=0;
 
@@ -87,7 +89,8 @@ PowerOfTwoAllocator {
 	}
 }
 
-LRUNumberAllocator {
+LRUNumberAllocator
+{
 	// implements a least recently used ID allocator.
 
 	var lo, hi;
@@ -119,7 +122,8 @@ LRUNumberAllocator {
 	}
 }
 
-StackNumberAllocator {
+StackNumberAllocator
+{
 	var lo, hi, freeList, next;
 
 	*new { arg lo, hi;
@@ -138,7 +142,8 @@ StackNumberAllocator {
 	}
 }
 
-RingNumberAllocator {
+RingNumberAllocator
+{
 	var lo, hi, next;
 
 	*new { arg lo, hi;

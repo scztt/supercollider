@@ -18,11 +18,6 @@
 
 #include <iostream>
 
-#include <boost/asio/placeholders.hpp>
-#include <boost/asio/read.hpp>
-#include <boost/bind.hpp>
-
-
 #include "osc/OscOutboundPacketStream.h"
 #include "osc/OscPrintReceivedElements.h"
 
@@ -54,7 +49,7 @@ server_node * find_node(int32_t target_id)
 
     server_node * node = instance->find_node(target_id);
 
-    if (node == nullptr)
+    if (node == NULL)
         log_printf("node not found: %d\n", target_id);
 
     return node;
@@ -67,7 +62,7 @@ abstract_group * find_group(int32_t target_id)
 
     abstract_group * node = instance->find_group(target_id);
 
-    if (node == nullptr)
+    if (node == NULL)
         log("node not found or not a group\n");
     return node;
 }
@@ -148,7 +143,7 @@ struct movable_string
     movable_string(movable_string const & rhs)
     {
         data_ = rhs.data_;
-        const_cast<movable_string&>(rhs).data_ = nullptr;
+        const_cast<movable_string&>(rhs).data_ = NULL;
     }
 
     ~movable_string(void)
@@ -163,7 +158,7 @@ struct movable_string
     }
 
 private:
-    const char * data_ = nullptr;
+    const char * data_;
 };
 
 template <typename T>
@@ -183,7 +178,7 @@ struct movable_array
     {
         length_ = rhs.length_;
         data_ = rhs.data_;
-        const_cast<movable_array&>(rhs).data_ = nullptr;
+        const_cast<movable_array&>(rhs).data_ = NULL;
     }
 
     ~movable_array(void)
@@ -208,7 +203,7 @@ struct movable_array
     }
 
 private:
-    size_t length_ = 0;
+    size_t length_;
     T * data_;
 };
 
@@ -276,7 +271,7 @@ struct fn_system_callback:
         fn_(fn)
     {}
 
-    void run(void) override
+    void run(void)
     {
         fn_();
     }
@@ -292,7 +287,7 @@ struct fn_sync_callback:
         fn_(fn)
     {}
 
-    void run(void) override
+    void run(void)
     {
         fn_();
     }
@@ -402,7 +397,7 @@ void fire_notification(movable_array<char> & msg)
 
 int sc_notify_observers::add_observer(endpoint_ptr const & ep)
 {
-    auto it = find(ep);
+    observer_vector::iterator it = find(ep);
     if (it != observers.end())
         return already_registered;
 
@@ -412,7 +407,7 @@ int sc_notify_observers::add_observer(endpoint_ptr const & ep)
 
 int sc_notify_observers::remove_observer(endpoint_ptr const & ep)
 {
-    auto it = find(ep);
+    observer_vector::iterator it = find(ep);
 
     if (it == observers.end())
         return not_registered;
@@ -442,7 +437,7 @@ const char * sc_notify_observers::error_string(error_code error)
 
 sc_notify_observers::observer_vector::iterator sc_notify_observers::find(endpoint_ptr const & ep)
 {
-    for (auto it = observers.begin(); it != observers.end(); ++it) {
+    for (observer_vector::iterator it = observers.begin(); it != observers.end(); ++it) {
 
         udp_endpoint * elemUDP = dynamic_cast<udp_endpoint*>(it->get());
         udp_endpoint * testUDP = dynamic_cast<udp_endpoint*>(ep.get());
@@ -880,10 +875,6 @@ void sc_osc_handler::handle_bundle(received_bundle const & bundle, endpoint_ptr 
     typedef osc::ReceivedBundleElement bundle_element;
 
     if (bundle_time <= now) {
-        if (!bundle_time.is_immediate()) {
-            time_tag late = now - bundle_time;
-            log_printf("late: %f\n", late.to_seconds());
-        };
         for (bundle_iterator it = bundle.ElementsBegin(); it != bundle.ElementsEnd(); ++it) {
             bundle_element const & element = *it;
 
@@ -990,7 +981,7 @@ void handle_status(endpoint_ptr endpoint)
           << average_load                           /* average cpu % */
           << peak_load                              /* peak cpu % */
           << instance->get_samplerate()             /* nominal samplerate */
-          << instance->smooth_samplerate             /* actual samplerate */
+          << instance->get_samplerate()             /* actual samplerate */
           << osc::EndMessage;
 
         endpoint->send(p.Data(), p.Size());
@@ -1068,15 +1059,15 @@ static bool node_position_sanity_check(node_position_constraint const & constrai
 sc_synth * add_synth(const char * name, int node_id, int action, int target_id)
 {
     if (!check_node_id(node_id))
-        return nullptr;
+        return 0;
 
     server_node * target = find_node(target_id);
-    if (target == nullptr)
-        return nullptr;
+    if (target == NULL)
+        return NULL;
 
     node_position_constraint pos = make_pair(target, node_position(action));
     if (!node_position_sanity_check(pos))
-        return nullptr;
+        return NULL;
 
     abstract_synth * synth = instance->add_synth(name, node_id, pos);
     if (!synth)
@@ -1219,7 +1210,7 @@ void handle_s_new(received_message const & msg)
 
     sc_synth * synth = add_synth(def_name, id, action, target);
 
-    if (synth == nullptr)
+    if (synth == NULL)
         return;
 
     try {
@@ -1737,7 +1728,7 @@ void handle_n_order(received_message const & msg)
 
     server_node * target = find_node(target_id);
 
-    if (target == nullptr)
+    if (target == NULL)
         return;
 
     abstract_group * target_parent;
@@ -1754,7 +1745,7 @@ void handle_n_order(received_message const & msg)
         args >> node_id;
 
         server_node * node = find_node(node_id);
-        if (node == nullptr)
+        if (node == NULL)
             continue;
 
         abstract_group * node_parent = node->get_parent();
@@ -2014,7 +2005,7 @@ struct completion_message
 
 completion_message extract_completion_message(osc::ReceivedMessageArgumentStream & args)
 {
-    osc::Blob blob(nullptr, 0);
+    osc::Blob blob(0, 0);
 
     if (!args.Eos()) {
         try {
@@ -2029,7 +2020,7 @@ completion_message extract_completion_message(osc::ReceivedMessageArgumentStream
 
 completion_message extract_completion_message(osc::ReceivedMessageArgumentIterator & it)
 {
-    const void * data = nullptr;
+    const void * data = 0;
     osc::osc_bundle_element_size_t length = 0;
 
     if (it->IsBlob())
@@ -2580,10 +2571,6 @@ void handle_b_set(received_message const & msg)
     osc::int32 buffer_index = it->AsInt32(); ++it;
 
     buffer_wrapper::sample_t * data = sc_factory->get_buffer(buffer_index);
-    if( !data ) {
-        log_printf("/b_set called on unallocated buffer");
-        return;
-    }
 
     while (it != end) {
         osc::int32 index = it->AsInt32(); ++it;
@@ -2601,10 +2588,6 @@ void handle_b_setn(received_message const & msg)
     osc::int32 buffer_index = it->AsInt32(); ++it;
 
     buffer_wrapper::sample_t * data = sc_factory->get_buffer(buffer_index);
-    if( !data ) {
-        log_printf("/b_setn called on unallocated buffer");
-        return;
-    }
 
     while (it != end) {
         osc::int32 index = it->AsInt32(); ++it;
@@ -2627,11 +2610,6 @@ void handle_b_fill(received_message const & msg)
     osc::int32 buffer_index = it->AsInt32(); ++it;
 
     buffer_wrapper::sample_t * data = sc_factory->get_buffer(buffer_index);
-    if( !data ) {
-        log_printf("/b_fill called on unallocated buffer");
-        return;
-    }
-
 
     while (it != end) {
         osc::int32 index = it->AsInt32(); ++it;
@@ -2720,11 +2698,6 @@ void handle_b_get(received_message const & msg, endpoint_ptr endpoint)
 
     const SndBuf * buf = sc_factory->get_buffer_struct(buffer_index);
     const sample * data = buf->data;
-    if( !data ) {
-        log_printf("/b_get called on unallocated buffer");
-        return;
-    }
-
     const int max_sample = buf->frames * buf->channels;
 
     osc::OutboundPacketStream p(return_message.c_array(), alloc_size);
@@ -2777,10 +2750,6 @@ void handle_b_getn(received_message const & msg, endpoint_ptr endpoint)
 
     const SndBuf * buf = sc_factory->get_buffer_struct(buffer_index);
     const sample * data = buf->data;
-    if( !data ) {
-        log_printf("/b_getn called on unallocated buffer");
-        return;
-    }
     const int max_sample = buf->frames * buf->channels;
 
     while (!args.Eos())
@@ -3191,7 +3160,7 @@ void handle_u_cmd(received_message const & msg, int size)
 
     server_node * target_synth = find_node(node_id);
 
-    if (target_synth == nullptr || target_synth->is_group())
+    if (target_synth == NULL || target_synth->is_group())
         return;
 
     sc_synth * synth = static_cast<sc_synth*>(target_synth);

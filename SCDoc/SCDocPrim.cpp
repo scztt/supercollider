@@ -37,35 +37,35 @@ PyrSymbol *s_scdoc_node;
 
 static void _doc_traverse(struct VMGlobals* g, DocNode *n, PyrObject *parent, PyrSlot *slot)
 {
-    PyrObject *result = instantiateObject( g->gc, s_scdoc_node->u.classobj, 0, false, true );
+    PyrObject *result = instantiateObject( g->gc, s_scdoc_node->u.classobj, 0, false, false );
+    result->size = 0;
 	SetObject(slot, result);
-	if(parent) {
-		assert(isKindOf(parent, class_array));
-		g->gc->GCWriteNew(parent, result); // we know result is white so we can use GCWriteNew
-		parent->size++;
-	}
+	if(parent) g->gc->GCWrite(parent, result);
 
-	// initialise the instance vars
     PyrSymbol *id = getsym(n->id);
-    SetSymbol(result->slots, id); // id
+    SetSymbol(result->slots+result->size++, id);
 
-	// text
     if(n->text) {
         PyrObject *str = (PyrObject*) newPyrString(g->gc, n->text, 0, true);
-        SetObject(result->slots+1, str);
-        g->gc->GCWriteNew(result, str); // we know str is white so we can use GCWriteNew
+        SetObject(result->slots+result->size++, str);
+        g->gc->GCWrite(result, str);
+    } else {
+        SetNil(result->slots+result->size++);
     }
-	
-	// children
+
     if(n->n_childs) {
         PyrObject *array = newPyrArray(g->gc, n->n_childs, 0, true);
-        SetObject(result->slots+2, array);
-        g->gc->GCWriteNew(result, array); // we know array is white so we can use GCWriteNew
+        array->size = 0;
+        SetObject(result->slots+result->size++, array);
+        g->gc->GCWrite(result, array);
         for(int i=0; i<n->n_childs; i++) {
+            array->size++;
             _doc_traverse(g, n->children[i], array, array->slots+i);
         }
-	}
-    // makeDiv, notPrivOnly, sort remain nil for now
+    } else {
+        SetNil(result->slots+result->size++);
+    }
+    result->size += 3; // makeDiv, notPrivOnly, sort
 }
 
 

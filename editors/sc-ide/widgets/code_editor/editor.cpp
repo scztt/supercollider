@@ -460,13 +460,15 @@ void GenericCodeEditor::showPosition( int pos, int selectionLength )
 
 QString GenericCodeEditor::symbolUnderCursor(QTextCursor* inCursor)
 {
-    const QTextCursor cursor = textCursor();
+    QTextCursor cursor = inCursor ? *inCursor : textCursor();
     if (cursor.hasSelection())
         return cursor.selectedText();
-
-    const QString blockString = cursor.block().text();
-    const int position = cursor.positionInBlock();
-    return tokenInStringAt( position, blockString );
+    else
+    {
+        QString blockString = cursor.block().text();
+        int position = cursor.positionInBlock();
+        return wordInStringAt( position, blockString );
+    }
 }
 
 bool GenericCodeEditor::event( QEvent * event )
@@ -491,134 +493,94 @@ bool GenericCodeEditor::event( QEvent * event )
     return QPlainTextEdit::event(event);
 }
 
-void GenericCodeEditor::keyPressEvent(QKeyEvent * event)
+void GenericCodeEditor::keyPressEvent(QKeyEvent * e)
 {
-    hideMouseCursor(event);
+    hideMouseCursor(e);
 
     QTextCursor cursor( textCursor() );
 
     bool updateCursor = false;
 
-    if (event == QKeySequence::InsertLineSeparator) {
+    if (e == QKeySequence::InsertLineSeparator) {
         // override to avoid entering a "soft" new line
         cursor.insertBlock();
         updateCursor = true;
     } else {
-        switch (event->key()) {
-        case Qt::Key_BraceRight:
-        case Qt::Key_BracketRight:
-        case Qt::Key_ParenRight:
-            handleKeyRightParentheses( event, cursor );
-            break;
+        switch (e->key()) {
 
         case Qt::Key_Delete:
-            handleKeyDelete( event, cursor );
+            if (e->modifiers() & Qt::META) {
+                cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+                cursor.removeSelectedText();
+            } else
+                QPlainTextEdit::keyPressEvent(e);
             break;
 
         case Qt::Key_Backspace:
-            handleKeyBackspace( event, cursor, updateCursor );
+            if (e->modifiers() & Qt::META) {
+                cursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::KeepAnchor);
+                cursor.removeSelectedText();
+            } else {
+                if ( !overwriteMode()
+                     || (cursor.positionInBlock() == 0)
+                     || cursor.hasSelection() ) {
+                    QPlainTextEdit::keyPressEvent(e);
+                } else {
+                    // in overwrite mode, backspace should insert a space
+                    cursor.movePosition(QTextCursor::PreviousCharacter, QTextCursor::KeepAnchor);
+                    QString selectedText = cursor.selectedText();
+                    if (selectedText == QString(" ") ||
+                        selectedText == QString("\t") ) {
+                        cursor.clearSelection();
+                    } else {
+                        cursor.insertText(QString(QChar(' ')));
+                        cursor.movePosition(QTextCursor::PreviousCharacter);
+                    }
+                }
+                updateCursor = true;
+            }
             break;
 
         case Qt::Key_Down:
-            handleKeyDown( event, cursor );
+        {
+            if (cursor.block() == textDocument()->lastBlock()) {
+                QTextCursor::MoveMode moveMode = e->modifiers() & Qt::SHIFT ? QTextCursor::KeepAnchor
+                                                                            : QTextCursor::MoveAnchor;
+
+                cursor.movePosition(QTextCursor::EndOfBlock, moveMode);
+                setTextCursor(cursor);
+            } else
+                QPlainTextEdit::keyPressEvent(e);
             break;
+        }
 
         case Qt::Key_Up:
-            handleKeyUp( event, cursor );
+        {
+            if (cursor.block() == textDocument()->firstBlock()) {
+                QTextCursor::MoveMode moveMode = e->modifiers() & Qt::SHIFT ? QTextCursor::KeepAnchor
+                                                                            : QTextCursor::MoveAnchor;
+
+                cursor.movePosition(QTextCursor::StartOfBlock, moveMode);
+                setTextCursor(cursor);
+            } else
+                QPlainTextEdit::keyPressEvent(e);
             break;
+        }
 
         default:
-            QPlainTextEdit::keyPressEvent(event);
+            QPlainTextEdit::keyPressEvent(e);
+
         }
-    }
+    } // else...
 
     if (updateCursor) {
         cursor.setVerticalMovementX(-1);
         setTextCursor( cursor );
         ensureCursorVisible();
     }
-
-    if (mDoc->keyDownActionEnabled() || Main::documentManager()->globalKeyDownActionEnabled())
-        doKeyAction(event);
+    if (mDoc->keyDownActionEnabled() || Main::documentManager()->globalKeyDownActionEnabled()) doKeyAction(e);
 }
     
-void GenericCodeEditor::handleKeyDown(QKeyEvent *event, QTextCursor & textCursor)
-{
-    if (textCursor.block() == textDocument()->lastBlock()) {
-        QTextCursor::MoveMode moveMode = event->modifiers() & Qt::SHIFT ? QTextCursor::KeepAnchor
-                                                                        : QTextCursor::MoveAnchor;
-
-        textCursor.movePosition(QTextCursor::EndOfBlock, moveMode);
-        setTextCursor(textCursor);
-    } else
-        QPlainTextEdit::keyPressEvent(event);
-}
-
-void GenericCodeEditor::handleKeyUp(QKeyEvent *event, QTextCursor & textCursor)
-{
-    if (textCursor.block() == textDocument()->firstBlock()) {
-        QTextCursor::MoveMode moveMode = event->modifiers() & Qt::SHIFT ? QTextCursor::KeepAnchor
-                                                                        : QTextCursor::MoveAnchor;
-
-        textCursor.movePosition(QTextCursor::StartOfBlock, moveMode);
-        setTextCursor(textCursor);
-    } else
-        QPlainTextEdit::keyPressEvent(event);
-}
-
-void GenericCodeEditor::handleKeyDelete(QKeyEvent *event, QTextCursor & textCursor)
-{
-    if (event->modifiers() & Qt::META) {
-         textCursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
-         textCursor.removeSelectedText();
-    } else
-        QPlainTextEdit::keyPressEvent(event);
-}
-
-void GenericCodeEditor::handleKeyBackspace(QKeyEvent * event, QTextCursor & textCursor, bool & updateCursor)
-{
-    if (event->modifiers() & Qt::META) {
-        textCursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::KeepAnchor);
-        textCursor.removeSelectedText();
-    } else {
-        if ( !overwriteMode()
-             || (textCursor.positionInBlock() == 0)
-             || textCursor.hasSelection() ) {
-            QPlainTextEdit::keyPressEvent(event);
-        } else {
-            // in overwrite mode, backspace should insert a space
-            textCursor.beginEditBlock();
-            textCursor.movePosition(QTextCursor::PreviousCharacter, QTextCursor::KeepAnchor);
-            QString selectedText = textCursor.selectedText();
-            if (selectedText == QStringLiteral(" ") ||
-                selectedText == QStringLiteral("\t") ) {
-                textCursor.clearSelection();
-            } else {
-                textCursor.insertText(QString(QChar(' ')));
-                textCursor.movePosition(QTextCursor::PreviousCharacter);
-            }
-            textCursor.endEditBlock();
-        }
-        updateCursor = true;
-    }
-}
-
-void GenericCodeEditor::handleKeyRightParentheses(QKeyEvent *event, QTextCursor &textCursor)
-{
-    if( !textCursor.atBlockEnd() ) {
-        QTextCursor nextCharCursor( textCursor );
-        nextCharCursor.movePosition( QTextCursor::NextCharacter, QTextCursor::KeepAnchor );
-
-        if( nextCharCursor.selectedText() == event->text() ) {
-            // don't insert, just move
-            moveCursor( QTextCursor::NextCharacter );
-            return;
-        }
-    }
-
-    QPlainTextEdit::keyPressEvent( event );
-}
-
 void GenericCodeEditor::keyReleaseEvent(QKeyEvent * e)
 {
     if(mDoc->keyUpActionEnabled() || Main::documentManager()->globalKeyUpActionEnabled()) doKeyAction(e);
@@ -666,12 +628,12 @@ void GenericCodeEditor::doKeyAction( QKeyEvent * ke )
     
     if(ke->type() == QEvent::KeyPress)
     {
-        type = QStringLiteral("keyDown");
+        type = QString("keyDown");
     } else {
-        type = QStringLiteral("keyUp");
+        type = QString("keyUp");
     }
 
-    Main::evaluateCodeIfCompiled(QStringLiteral("Document.findByQUuid(\'%1\').%2(%3, %4, %5, %6)").arg(mDoc->id().constData()).arg(type).arg(mods).arg(unicode).arg(keycode).arg(key), true);
+    Main::evaluateCodeIfCompiled(QString("Document.findByQUuid(\'%1\').%2(%3, %4, %5, %6)").arg(mDoc->id().constData()).arg(type).arg(mods).arg(unicode).arg(keycode).arg(key), true);
     
 }
     
@@ -690,7 +652,7 @@ void GenericCodeEditor::mousePressEvent(QMouseEvent * e)
                 button = -1;
         }
     
-        Main::evaluateCodeIfCompiled(QStringLiteral("Document.findByQUuid(\'%1\').mouseDown(%2, %3, %4, %5, 1)").arg(mDoc->id().constData()).arg(e->x()).arg(e->y()).arg(e->modifiers()).arg(button), true);
+        Main::evaluateCodeIfCompiled(QString("Document.findByQUuid(\'%1\').mouseDown(%2, %3, %4, %5, 1)").arg(mDoc->id().constData()).arg(e->x()).arg(e->y()).arg(e->modifiers()).arg(button), true);
     }
     
     QPlainTextEdit::mousePressEvent(e);
@@ -711,7 +673,7 @@ void GenericCodeEditor::mouseDoubleClickEvent(QMouseEvent * e)
                 button = -1;
         }
         
-        Main::evaluateCodeIfCompiled(QStringLiteral("Document.findByQUuid(\'%1\').mouseDown(%2, %3, %4, %5, 2)").arg(mDoc->id().constData()).arg(e->x()).arg(e->y()).arg(e->modifiers()).arg(button), true);
+        Main::evaluateCodeIfCompiled(QString("Document.findByQUuid(\'%1\').mouseDown(%2, %3, %4, %5, 2)").arg(mDoc->id().constData()).arg(e->x()).arg(e->y()).arg(e->modifiers()).arg(button), true);
     }
     
     QPlainTextEdit::mouseDoubleClickEvent(e);
@@ -732,7 +694,7 @@ void GenericCodeEditor::mouseReleaseEvent(QMouseEvent * e)
                 button = -1;
         }
         
-        Main::evaluateCodeIfCompiled(QStringLiteral("Document.findByQUuid(\'%1\').mouseUp(%2, %3, %4, %5)").arg(mDoc->id().constData()).arg(e->x()).arg(e->y()).arg(e->modifiers()).arg(button), true);
+        Main::evaluateCodeIfCompiled(QString("Document.findByQUuid(\'%1\').mouseUp(%2, %3, %4, %5)").arg(mDoc->id().constData()).arg(e->x()).arg(e->y()).arg(e->modifiers()).arg(button), true);
         
     }
     QPlainTextEdit::mouseReleaseEvent(e);
@@ -1153,18 +1115,6 @@ void GenericCodeEditor::moveLineUp()
 void GenericCodeEditor::moveLineDown()
 {
     moveLineUpDown(false);
-}
-
-void GenericCodeEditor::deleteWord()
-{
-    QTextCursor cur = textCursor();
-
-    cur.beginEditBlock();
-
-    cur.movePosition(QTextCursor::StartOfWord, QTextCursor::KeepAnchor);
-    cur.deletePreviousChar();
-
-    cur.endEditBlock();
 }
 
 void GenericCodeEditor::gotoPreviousEmptyLine()

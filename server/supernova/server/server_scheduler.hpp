@@ -42,7 +42,8 @@ struct audio_sync_callback:
     public static_pooled_class<audio_sync_callback, 1<<20 /* 1mb pool of realtime memory */,
                                true>
 {
-    virtual ~audio_sync_callback() = default;
+    virtual ~audio_sync_callback()
+    {}
 
     virtual void run(void) = 0;
 };
@@ -61,9 +62,9 @@ struct audio_sync_callback:
 template<class thread_init_functor = nop_thread_init>
 class scheduler
 {
-    typedef nova::dsp_thread_pool<queue_node, thread_init_functor, rt_pool_allocator<void*> > dsp_thread_pool;
-    typedef typename dsp_thread_pool::dsp_thread_queue_ptr dsp_thread_queue_ptr;
-    typedef typename dsp_thread_pool::thread_count_t thread_count_t;
+    typedef nova::dsp_threads<queue_node, thread_init_functor, rt_pool_allocator<void*> > dsp_threads;
+    typedef typename dsp_threads::dsp_thread_queue_ptr dsp_thread_queue_ptr;
+    typedef typename dsp_threads::thread_count_t thread_count_t;
 
     struct reset_queue_cb:
         public audio_sync_callback
@@ -73,7 +74,7 @@ class scheduler
             sched(sched), qptr(qptr)
         {}
 
-        void run(void) override
+        void run(void)
         {
             sched->reset_queue_sync(qptr);
             /** todo: later free the queue in a helper thread */
@@ -134,10 +135,11 @@ public:
 
 private:
     callback_system<audio_sync_callback, false> cbs;
-    dsp_thread_pool threads;
+    dsp_threads threads;
     std::mutex sync_mutex;
 };
 
 } /* namespace nova */
 
 #endif /* SERVER_SCHEDULER_HPP */
+

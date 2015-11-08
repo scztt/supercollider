@@ -1716,6 +1716,7 @@ void LocalOut_next_k(IOUnit *unit, int inNumSamples)
 void LocalOut_Ctor(IOUnit* unit)
 {
 	//Print("->LocalOut_Ctor\n");
+	World *world = unit->mWorld;
 	unit->m_fbusChannel = -1.;
 
 	if (unit->mCalcRate == calc_FullRate) {

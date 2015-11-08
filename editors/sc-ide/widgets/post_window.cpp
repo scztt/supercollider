@@ -192,7 +192,7 @@ QString PostWindow::symbolUnderCursor()
     {
         QString blockString = cursor.block().text();
         int position = cursor.positionInBlock();
-        return tokenInStringAt( position, blockString );
+        return wordInStringAt( position, blockString );
     }
 }
 

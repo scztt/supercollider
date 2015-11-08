@@ -84,7 +84,6 @@ public slots:
     void copyLineDown();
     void moveLineUp();
     void moveLineDown();
-    void deleteWord();
     void gotoPreviousEmptyLine();
     void gotoNextEmptyLine();
     void setActiveAppearance(bool active);
@@ -131,13 +130,6 @@ protected:
     QGraphicsRectItem *mFocusRect = 0;
     
     int mInactiveFadeAlpha = 0;
-
-private:
-    void handleKeyDown(QKeyEvent * event, QTextCursor & textCursor);
-    void handleKeyUp(QKeyEvent * event, QTextCursor & textCursor);
-    void handleKeyDelete(QKeyEvent * event, QTextCursor & textCursor);
-    void handleKeyRightParentheses(QKeyEvent * event, QTextCursor & textCursor);
-    void handleKeyBackspace(QKeyEvent * event, QTextCursor & textCursor, bool & updateCursor);
 };
 
 } // namespace ScIDE

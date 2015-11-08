@@ -25,7 +25,7 @@
 namespace nova {
 
 sc_synth::sc_synth(int node_id, sc_synth_definition_ptr const & prototype):
-    abstract_synth(node_id, prototype)
+    abstract_synth(node_id, prototype), initialized(false), trace(0), unit_buffers(0)
 {
     World const & world = sc_factory->world;
     const bool rt_synthesis = world.mRealTime;
@@ -37,8 +37,8 @@ sc_synth::sc_synth(int node_id, sc_synth_definition_ptr const & prototype):
     mRGen = &rgen;
     mSubsampleOffset = world.mSubsampleOffset;
     mSampleOffset = world.mSampleOffset;
-    mLocalAudioBusUnit = nullptr;
-    mLocalControlBusUnit = nullptr;
+    mLocalAudioBusUnit = 0;
+    mLocalControlBusUnit = 0;
 
     localBufNum = 0;
     localMaxBufNum = 0;
@@ -62,7 +62,7 @@ sc_synth::sc_synth(int node_id, sc_synth_definition_ptr const & prototype):
     char * raw_chunk = rt_synthesis ? (char*)rt_pool.malloc(total_alloc_size)
                                     : (char*)malloc(total_alloc_size);
 
-    if (raw_chunk == nullptr)
+    if (raw_chunk == NULL)
         throw std::bad_alloc();
 
     linear_allocator allocator(raw_chunk);
@@ -84,9 +84,9 @@ sc_synth::sc_synth(int node_id, sc_synth_definition_ptr const & prototype):
     mWire = allocator.alloc<Wire>(constants_count);
     for (size_t i = 0; i != synthdef.constants.size(); ++i) {
         Wire * wire = mWire + i;
-        wire->mFromUnit = nullptr;
+        wire->mFromUnit = 0;
         wire->mCalcRate = 0;
-        wire->mBuffer = nullptr;
+        wire->mBuffer = 0;
         wire->mScalarValue = get_constant(i);
     }
 

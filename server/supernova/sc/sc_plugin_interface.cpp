@@ -60,8 +60,8 @@ spin_lock rt_pool_guard;
 
 inline Node * as_Node(server_node * node)
 {
-    if (node == nullptr)
-        return nullptr;
+    if (node == NULL)
+        return NULL;
 
     // hack!!! we only assume that the 32bit integer mID member can be accessed via Node
     if (node->is_synth()) {
@@ -304,7 +304,7 @@ bool get_scope_buffer(World *inWorld, int index, int channels, int maxFrames, Sc
         return true;
     }
     else {
-        hnd.internalData = nullptr;
+        hnd.internalData = 0;
         return false;
     }
 }
@@ -368,7 +368,7 @@ void * rt_alloc(World * dummy, size_t size)
     if (size)
         return nova::rt_pool.malloc(size);
     else
-        return nullptr;
+        return NULL;
 }
 
 void * rt_realloc(World * dummy, void * ptr, size_t size)
@@ -418,28 +418,14 @@ void nrt_free_2(World * dummy, void * ptr)
 
 void clear_outputs(Unit *unit, int samples)
 {
-    const uint32_t outputs = unit->mNumOutputs;
+    size_t outputs = unit->mNumOutputs;
 
-    if( (samples & 63) == 0 ) {
-        const uint32_t loops = samples / 64;
-
-        for( int i=0; i != outputs; ++i ) {
-            float * buffer = unit->mOutBuf[i];
-            for( int loop = 0; loop != loops; ++loop ) {
-                nova::zerovec_simd<64>( buffer + loop * 64 );
-            }
-        }
-        return;
-    }
-
-    if( (samples & 15) == 0 ) {
-        for( int i=0; i != outputs; ++i )
+    if ((samples & 15) == 0)
+        for (size_t i=0; i!=outputs; ++i)
             nova::zerovec_simd(unit->mOutBuf[i], samples);
-        return;
-    }
-
-    for( int i=0; i != outputs; ++i )
-      nova::zerovec(unit->mOutBuf[i], samples);
+    else
+        for (size_t i=0; i!=outputs; ++i)
+            nova::zerovec(unit->mOutBuf[i], samples);
 }
 
 void node_end(struct Node * node)
@@ -558,13 +544,7 @@ void done_action(int done_action, struct Unit *unit)
 
 int buf_alloc(SndBuf * buf, int channels, int frames, double samplerate)
 {
-    try {
-        nova::sc_factory->allocate_buffer(buf, channels, frames, samplerate);
-        return kSCErr_None;
-    } catch(std::exception const & e) {
-        std::cout << e.what() << std::endl;
-        return kSCErr_Failed;
-    }
+    return nova::sc_factory->allocate_buffer(buf, channels, frames, samplerate);
 }
 
 void send_trigger(Node * unit, int trigger_id, float value)
@@ -661,7 +641,7 @@ void sc_plugin_interface::initialize(server_arguments const & args, float * cont
 
     /* sndfile functions */
 #ifdef NO_LIBSNDFILE
-    sc_interface.fSndFileFormatInfoFromStrings = nullptr;
+    sc_interface.fSndFileFormatInfoFromStrings = NULL;
 #else
     sc_interface.fSndFileFormatInfoFromStrings = &sndfileFormatInfoFromStrings;
 #endif
@@ -844,14 +824,14 @@ inline void sndbuf_init(SndBuf * buf)
 {
     buf->samplerate = 0;
     buf->sampledur = 0;
-    buf->data = nullptr;
+    buf->data = 0;
     buf->channels = 0;
     buf->samples = 0;
     buf->frames = 0;
     buf->mask = 0;
     buf->mask1 = 0;
     buf->coord = 0;
-    buf->sndfile = nullptr;
+    buf->sndfile = 0;
     buf->isLocal = false;
 }
 
@@ -913,25 +893,27 @@ void read_channel(SndfileHandle & sf, uint32_t channel_count, const uint32_t * c
 
 } /* namespace */
 
-void sc_plugin_interface::allocate_buffer(SndBuf * buf, uint32_t frames, uint32_t channels, double samplerate)
+int sc_plugin_interface::allocate_buffer(SndBuf * buf, uint32_t frames, uint32_t channels, double samplerate)
 {
     const uint32_t samples = frames * channels;
     if (samples == 0)
-        throw std::runtime_error( "invalid buffer size" );
+        return kSCErr_Failed; /* invalid buffer size */
 
     sample * data = nova::allocate_buffer(samples);
-    if (data == nullptr)
-        throw std::runtime_error( "could not allocate memory" );
+    if (data == NULL)
+        return kSCErr_Failed; /* could not allocate memory */
 
-    buf->data       = data;
-    buf->channels   = channels;
-    buf->frames     = frames;
-    buf->samples    = samples;
-    buf->mask       = bufmask(samples); /* for delay lines */
-    buf->mask1      = buf->mask - 1;    /* for oscillators */
+    buf->data = data;
+
+    buf->channels = channels;
+    buf->frames = frames;
+    buf->samples = samples;
+    buf->mask = bufmask(samples); /* for delay lines */
+    buf->mask1 = buf->mask - 1;    /* for oscillators */
     buf->samplerate = samplerate;
-    buf->sampledur  = 1.0 / samplerate;
-    buf->isLocal    = false;
+    buf->sampledur = 1.0 / samplerate;
+    buf->isLocal = false;
+    return kSCErr_None;
 }
 
 SndBuf * sc_plugin_interface::allocate_buffer(uint32_t index, uint32_t frames, uint32_t channels)
@@ -1090,10 +1072,10 @@ void sc_plugin_interface::buffer_close(uint32_t index)
 {
     SndBuf * buf = World_GetNRTBuf(&world, index);
 
-    if (buf->sndfile == nullptr)
+    if (buf->sndfile == NULL)
         return;
     sf_close(buf->sndfile);
-    buf->sndfile = nullptr;
+    buf->sndfile = NULL;
 }
 
 

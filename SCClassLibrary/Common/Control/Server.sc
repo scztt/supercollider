@@ -1,4 +1,5 @@
-ServerOptions {
+ServerOptions
+{
 	// order of variables is important here. Only add new instance variables to the end.
 	var <numAudioBusChannels=128;
 	var <>numControlBusChannels=4096;
@@ -36,7 +37,6 @@ ServerOptions {
 
 	var <>memoryLocking = false;
 	var <>threads = nil; // for supernova
-	var <>useSystemClock = false;  // for supernova
 
 	var <numPrivateAudioBusChannels=112;
 
@@ -159,9 +159,6 @@ ServerOptions {
 				o = o ++ " -T " ++ threads;
 			}
 		});
-		if (useSystemClock.notNil, {
-			o = o ++ " -C " ++ useSystemClock.asInteger
-		});
 		if (maxLogins.notNil, {
 			o = o ++ " -l " ++ maxLogins;
 		});
@@ -282,13 +279,13 @@ Server {
 	var <avgCPU, <peakCPU;
 	var <sampleRate, <actualSampleRate;
 
-	var alive = false, booting = false, <unresponsive = false, aliveThread, <>aliveThreadPeriod = 0.7, statusWatcher;
+	var alive = false, booting = false, aliveThread, <>aliveThreadPeriod = 0.7, statusWatcher;
 	var <>tree;
 
 	var <window, <>scopeWindow;
 	var <emacsbuf;
 	var recordBuf, <recordNode, <>recHeaderFormat="aiff", <>recSampleFormat="float";
-	var <>recChannels=2, <>recBufSize;
+	var <>recChannels=2;
 
 	var <volume;
 
@@ -478,7 +475,7 @@ Server {
 	listSendMsg { arg msg;
 		addr.sendMsg(*msg);
 	}
-	listSendBundle { arg time, msgs;
+ 	listSendBundle { arg time, msgs;
 		addr.sendBundle(time, *(msgs.asArray));
 	}
 
@@ -522,35 +519,33 @@ Server {
 			if(val.not) {
 				reallyDeadCount = reallyDeadCount - 1;
 			};
-			if (val != serverRunning) {
-				serverRunning = val;
+			if (val != serverRunning or: { reallyDeadCount == 0 }) {
+				if(thisProcess.platform.isSleeping.not) {
+					serverRunning = val;
 
-				if (serverRunning.not) {
-					if(reallyDeadCount <= 0) {
-						ServerQuit.run(this);
+					if (serverRunning.not) {
+						if(reallyDeadCount <= 0) {
+							ServerQuit.run(this);
 
-						if (serverInterface.notNil) {
-							"server disconnected shared memory interface".postln;
-							serverInterface.disconnect;
-							serverInterface = nil;
+							if (serverInterface.notNil) {
+								serverInterface.disconnect;
+								serverInterface = nil;
+							};
+
+							NotificationCenter.notify(this, \didQuit);
+							recordNode = nil;
+							if(this.isLocal.not) {
+								notified = false;
+							};
 						};
-
-						NotificationCenter.notify(this, \didQuit);
-						recordNode = nil;
-						if(this.isLocal.not) {
-							notified = false;
+					} {
+						if(reallyDeadCount <= 0) {
+							ServerBoot.run(this);
 						};
+						reallyDeadCount = this.options.pingsBeforeConsideredDead;
 					};
-				} {
-					if(reallyDeadCount <= 0) {
-						ServerBoot.run(this);
-					};
-					reallyDeadCount = this.options.pingsBeforeConsideredDead;
-				};
-				{ this.changed(\serverRunning) }.defer;
-
-			} {
-				unresponsive = (reallyDeadCount == 0);
+					{ this.changed(\serverRunning); }.defer;
+				}
 			}
 		};
 	}
@@ -713,8 +708,6 @@ Server {
 		if (serverBooting, { "server already booting".inform; ^this });
 
 		serverBooting = true;
-		unresponsive = false;
-
 		if(startAliveThread, { this.startAliveThread });
 		if(recover) { this.newNodeAllocators } { this.newAllocators };
 		bootNotifyFirst = true;
@@ -747,7 +740,6 @@ Server {
 	}
 
 	bootServerApp {
-		var f;
 		if (inProcess) {
 			"booting internal".inform;
 			this.bootInProcess;
@@ -756,30 +748,9 @@ Server {
 			if (serverInterface.notNil) {
 				serverInterface.disconnect;
 				serverInterface = nil;
-				"server disconnected shared memory interface".postln;
 			};
 
 			pid = (program ++ options.asOptionsString(addr.port)).unixCmd;
-			if( options.protocol == \tcp ){
-				f = {
-					|attempts|
-					attempts = attempts - 1;
-					try { addr.connect } {
-						|err|
-						if (err.isKindOf(PrimitiveFailedError) and: { err.failedPrimitiveName == '_NetAddr_Connect'}) {
-							if(attempts > 0){
-								0.2.wait;
-								f.value(attempts)
-							}{
-								"Couldn't connect to server % via TCP\n".postf(this.name);
-							}
-						} {
-							err.throw;
-						}
-					}
-				};
-				fork{ f.(10) }
-			};
 			("booting " ++ addr.port.asString).inform;
 		};
 	}
@@ -792,7 +763,7 @@ Server {
 				this.wait(\done);
 				0.1.wait;
 				func.value;
-				defer { this.boot }
+				this.boot;
 			}
 		} {
 			func.value;
@@ -879,7 +850,6 @@ Server {
 			};
 		};
 		addr.sendMsg("/quit");
-		if( options.protocol == \tcp ){ fork{ 0.1.wait; addr.disconnect } };
 		this.stopAliveThread;
 		if (inProcess, {
 			this.quitInProcess;
@@ -1063,7 +1033,7 @@ Server {
 				path = thisProcess.platform.recordingsDir +/+ "SC_" ++ Date.localtime.stamp ++ "." ++ recHeaderFormat;
 			};
 		};
-		recordBuf = Buffer.alloc(this, recBufSize ?? { sampleRate.nextPowerOfTwo }, recChannels,
+		recordBuf = Buffer.alloc(this, 65536 * 16, recChannels,
 			{arg buf; buf.writeMsg(path, recHeaderFormat, recSampleFormat, 0, 0, true);},
 			this.options.numBuffers + 1); // prevent buffer conflicts by using reserved bufnum
 		recordBuf.path = path;

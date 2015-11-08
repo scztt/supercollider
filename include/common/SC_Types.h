@@ -21,8 +21,7 @@
 #ifndef _SC_Types_
 #define _SC_Types_
 
-#include <stddef.h>
-#include <stdint.h>
+#include <sys/types.h>
 
 #if !defined(__cplusplus)
 # include <stdbool.h>
@@ -30,17 +29,22 @@
 
 typedef int SCErr;
 
-typedef  int64_t  int64;
-typedef uint64_t uint64;
+#ifdef _WIN32
+typedef __int64	int64;
+typedef unsigned __int64 uint64;
+#else
+typedef long long int64;
+typedef unsigned long long uint64;
+#endif
 
-typedef  int32_t  int32;
-typedef uint32_t uint32;
+typedef int int32;
+typedef unsigned int uint32;
 
-typedef  int16_t  int16;
-typedef uint16_t uint16;
+typedef short int16;
+typedef unsigned short uint16;
 
-typedef  int8_t  int8;
-typedef uint8_t uint8;
+typedef signed char int8;
+typedef unsigned char uint8;
 
 typedef float float32;
 typedef double float64;

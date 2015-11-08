@@ -328,7 +328,7 @@ Document.current.mouseUpAction = nil; // clear mouseUpActiont
 method:: keyDownAction
 Get/set the action to be performed on link::Classes/Document#keyDown::.
 argument:: value
-An instance of link::Classes/Function:: or link::Classes/FunctionList::. The arguments passed to the function are: code::char::, code::modifiers::, code::unicode::, code::keycode::. See link::Classes/View#Key actions:: for details on these arguments.
+An instance of link::Classes/Function:: or link::Classes/FunctionList::. The arguments passed to the function are: code::char::, code::modifiers::, code::unicode::, code::keycode::.
 discussion::
 code::
 Document.current.keyDownAction = { arg ...args; args.postln };
@@ -339,8 +339,7 @@ Document.current.keyDownAction = nil;
 method:: keyUpAction
 Get/set the action to be performed on link::Classes/Document#keyUp::.
 argument:: value
-An instance of link::Classes/Function:: or link::Classes/FunctionList::. The arguments passed to the function are: code::char::, code::modifiers::, code::unicode::, code::keycode::. See link::Classes/View#Key actions:: for details on these arguments.
-discussion::
+An instance of link::Classes/Function:: or link::Classes/FunctionList::. The arguments passed to the function are: code::char::, code::modifiers::, code::unicode::, code::keycode::.
 code::
 Document.current.keyUpAction = { arg ...args; args.postln };
 // now type some text
@@ -468,6 +467,21 @@ Document.current.font_(Font("Impact", 14),
 method:: underlineSelection
 Underlines the current selection of a Document.
 
+
+subsection:: Auto-Completion
+
+note::
+OSX version only, currently. See link::Reference/DocumentAutoCompletion::.
+::
+code::
+	*allowAutoComp
+	*autoCompAll
+	*autoComplete
+	*autoCompleteKeyAction
+	*openFileAutoComplete (path)
+	*openAutoComplete
+	autoComplete
+::
 
 subsection:: Subclassing and Internal Methods
 

@@ -135,8 +135,9 @@ bool abstract_group::has_child(const server_node * node) const
         return false;
 
     /* find node in container */
-    for (const auto & elem : child_nodes) {
-        if (&elem == node)
+    for (server_node_list::const_iterator it = child_nodes.begin();
+         it != child_nodes.end(); ++it) {
+        if (&*it == node)
             return true;
     }
     return false;
@@ -151,21 +152,24 @@ void abstract_group::remove_child(server_node * node)
 
 void abstract_group::set(slot_index_t slot_id, float val)
 {
-    for(auto & elem : child_nodes)
-        elem.set(slot_id, val);
+    for(server_node_list::iterator it = child_nodes.begin();
+        it != child_nodes.end(); ++it)
+        it->set(slot_id, val);
 }
 
 void abstract_group::set(const char * slot_str, float val)
 {
     size_t hashed_str = string_hash(slot_str);
-    for(auto & elem : child_nodes)
-        elem.set(slot_str, hashed_str, val);
+    for(server_node_list::iterator it = child_nodes.begin();
+        it != child_nodes.end(); ++it)
+        it->set(slot_str, hashed_str, val);
 }
 
 void abstract_group::set(const char * slot_str, std::size_t hashed_str, float val)
 {
-    for(auto & elem : child_nodes)
-        elem.set(slot_str, hashed_str, val);
+    for(server_node_list::iterator it = child_nodes.begin();
+        it != child_nodes.end(); ++it)
+        it->set(slot_str, hashed_str, val);
 }
 
 
@@ -177,14 +181,14 @@ void abstract_group::set_control_array(const char * slot_str, size_t count, floa
 
 void abstract_group::set_control_array(const char * slot_str, std::size_t hashed_str, size_t count, float * val)
 {
-    for(auto & elem : child_nodes)
-        elem.set_control_array(slot_str, hashed_str, count, val);
+    for(server_node_list::iterator it = child_nodes.begin(); it != child_nodes.end(); ++it)
+        it->set_control_array(slot_str, hashed_str, count, val);
 }
 
 void abstract_group::set_control_array(slot_index_t slot_id, size_t count, float * val)
 {
-    for(auto & elem : child_nodes)
-        elem.set_control_array(slot_id, count, val);
+    for(server_node_list::iterator it = child_nodes.begin(); it != child_nodes.end(); ++it)
+        it->set_control_array(slot_id, count, val);
 }
 
 
@@ -196,22 +200,22 @@ void abstract_group::set_control_array_element(const char * slot_str, size_t ind
 
 void abstract_group::set_control_array_element(const char * slot_str, std::size_t hashed_str, size_t index, float val)
 {
-    for(auto & elem : child_nodes)
-        elem.set_control_array_element(slot_str, hashed_str, index, val);
+    for(server_node_list::iterator it = child_nodes.begin(); it != child_nodes.end(); ++it)
+        it->set_control_array_element(slot_str, hashed_str, index, val);
 }
 
 void abstract_group::set_control_array_element(slot_index_t slot_id, size_t index, float val)
 {
-    for(auto & elem : child_nodes)
-        elem.set_control_array_element(slot_id, index, val);
+    for(server_node_list::iterator it = child_nodes.begin(); it != child_nodes.end(); ++it)
+        it->set_control_array_element(slot_id, index, val);
 }
 
 
 int parallel_group::tail_nodes(void) const
 {
     int ret = child_synth_count;
-    for(const auto & elem : child_groups)
-        ret += elem.tail_nodes();
+    for(group_list::const_iterator it = child_groups.begin(); it != child_groups.end(); ++it)
+        ret += it->tail_nodes();
 
     return ret;
 }

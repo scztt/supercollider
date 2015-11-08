@@ -1,4 +1,5 @@
-EnvelopeView : View {
+EnvelopeView : View
+{
 	var <editable, <step, <grid, <gridOn = false;
 	var <fillColor;
 	var <drawLines = true, <drawRects = true;

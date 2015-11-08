@@ -101,7 +101,6 @@ public:
         // Help
         Help,
         HelpAboutIDE,
-        ReportABug,
         LookupDocumentationForCursor,
         LookupDocumentation,
         ShowAbout,
@@ -185,7 +184,6 @@ private Q_SLOTS:
     void lookupReferencesForCursor();
     void openHelp();
     void openHelpAboutIDE();
-    void doBugReport();
     void lookupDocumentationForCursor();
     void lookupDocumentation();
     void applySettings( Settings::Manager * );

@@ -70,7 +70,6 @@ void Manager::initDefaults()
     setDefault("inactiveEditorFadeAlpha", 64);
     setDefault("insertMatchingTokens", false);
     setDefault("showLinenumber", true);
-    setDefault("showAutocompleteHelp", true);
 
     setDefault("blinkDuration", 600);
 

@@ -344,7 +344,7 @@ void PyrGC::BecomeImmutable(PyrObject *inObject)
 
 void DumpBackTrace(VMGlobals *g);
 
-HOT PyrObject *PyrGC::New(size_t inNumBytes, long inFlags, long inFormat, bool inRunCollection)
+HOT PyrObject *PyrGC::New(size_t inNumBytes, long inFlags, long inFormat, bool inCollect)
 {
 	PyrObject *obj = NULL;
 
@@ -369,7 +369,7 @@ HOT PyrObject *PyrGC::New(size_t inNumBytes, long inFlags, long inFormat, bool i
 	mNumAllocs++;
 
 	mNumToScan += credit;
-	obj = Allocate(inNumBytes, sizeclass, inRunCollection);
+	obj = Allocate(inNumBytes, sizeclass, inCollect);
 
 	obj->obj_format = inFormat;
 	obj->obj_flags = inFlags & 255;
@@ -420,7 +420,7 @@ HOT PyrObject *PyrGC::NewFrame(size_t inNumBytes, long inFlags, long inFormat, b
 	return obj;
 }
 
-PyrObject *PyrGC::NewFinalizer(ObjFuncPtr finalizeFunc, PyrObject *inObject, bool inRunCollection)
+PyrObject *PyrGC::NewFinalizer(ObjFuncPtr finalizeFunc, PyrObject *inObject, bool inCollect)
 {
 	PyrObject *obj = NULL;
 
@@ -437,7 +437,7 @@ PyrObject *PyrGC::NewFinalizer(ObjFuncPtr finalizeFunc, PyrObject *inObject, boo
 	mAllocTotal += credit;
 	mNumAllocs++;
 
-	if (inRunCollection && mNumToScan >= kScanThreshold) {
+	if (inCollect && mNumToScan >= kScanThreshold) {
 		Collect();
 	}
 

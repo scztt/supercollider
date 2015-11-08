@@ -19,6 +19,8 @@
 #ifndef SERVER_GROUP_HPP
 #define SERVER_GROUP_HPP
 
+#include <boost/tuple/tuple.hpp> /* for boost::tie */
+
 #include "memory_pool.hpp"
 #include "node_types.hpp"
 #include "dsp_thread_queue_node.hpp"
@@ -54,10 +56,10 @@ class abstract_group:
 protected:
     server_node_list child_nodes;
     group_list child_groups;
-    const bool group_is_parallel;
+    const bool is_parallel_;
 
     abstract_group(int node_id, bool is_parallel):
-        server_node(node_id, false), group_is_parallel(is_parallel)
+        server_node(node_id, false), is_parallel_(is_parallel), child_synth_count(0), child_group_count(0)
     {}
 
 public:
@@ -65,7 +67,7 @@ public:
 
     bool is_parallel(void) const
     {
-        return group_is_parallel;
+        return is_parallel_;
     }
 
 
@@ -75,8 +77,8 @@ public:
 
     /* @{ */
     /** pause/resume handling (set pause/resume on children)  */
-    virtual void pause(void) override;
-    virtual void resume(void) override;
+    virtual void pause(void);
+    virtual void resume(void);
     /* @} */
 
     /* @{ */
@@ -99,8 +101,8 @@ public:
         if (child_synth_count)
             return true;
 
-        for (const auto & elem : child_groups)
-            if (elem.has_synth_children())
+        for (group_list::const_iterator it = child_groups.begin(); it != child_groups.end(); ++it)
+            if (it->has_synth_children())
                 return true;
 
         return false;
@@ -111,8 +113,8 @@ public:
         if (is_parallel())
             return true;
 
-        for (const auto & elem : child_groups)
-            if (elem.has_parallel_group_children())
+        for (group_list::const_iterator it = child_groups.begin(); it != child_groups.end(); ++it)
+            if (it->has_parallel_group_children())
                 return true;
 
         return false;
@@ -128,27 +130,27 @@ public:
     template<typename functor>
     void apply_on_children(functor const & f)
     {
-        for (auto & elem : child_nodes)
-            f(elem);
+        for (server_node_list::iterator it = child_nodes.begin(); it != child_nodes.end(); ++it)
+            f(*it);
     }
 
     template<typename functor>
     void apply_deep_on_children(functor const & f)
     {
-        for (auto & elem : child_nodes) {
-            if (elem.is_group()) {
-                abstract_group & grp = static_cast<abstract_group&>(elem);
+        for (server_node_list::iterator it = child_nodes.begin(); it != child_nodes.end(); ++it) {
+            if (it->is_group()) {
+                abstract_group & grp = static_cast<abstract_group&>(*it);
                 grp.apply_deep_on_children(f);
             }
-            f(elem);
+            f(*it);
         }
     }
 
     template<typename functor>
     void apply_on_children(functor const & f) const
     {
-        for (const auto & elem : child_nodes)
-            f(elem);
+        for (server_node_list::const_iterator it = child_nodes.begin(); it != child_nodes.end(); ++it)
+            f(*it);
     }
     /* @} */
 
@@ -171,7 +173,7 @@ public:
         assert(has_child(node));
         server_node_list::iterator next = ++server_node_list::s_iterator_to(*node);
         if (unlikely(next == child_nodes.end()))
-            return nullptr;
+            return 0;
         else
             return &(*next);
     }
@@ -181,7 +183,7 @@ public:
         assert(has_child(node));
         server_node_list::iterator it = server_node_list::s_iterator_to(*node);
         if (unlikely(it == child_nodes.begin()))
-            return nullptr;
+            return 0;
         else
             return &(*--it);
     }
@@ -199,8 +201,8 @@ public:
                                           std::mem_fn(&server_node::clear_parent));
 
         /* now there are only group classes */
-        for(auto & elem : child_nodes) {
-            abstract_group * group = static_cast<abstract_group*>(&elem);
+        for(server_node_list::iterator it = child_nodes.begin(); it != child_nodes.end(); ++it) {
+            abstract_group * group = static_cast<abstract_group*>(&*it);
             group->free_synths_deep();
         }
         assert(child_synth_count == 0);
@@ -210,17 +212,17 @@ public:
     void remove_child(server_node * node);
     /* @} */
 
-    void set(slot_index_t slot_id, float val) override;
-    void set(const char * slot_str, float val) override;
-    void set(const char * slot_str, size_t hashed_str, float val) override;
+    void set(slot_index_t slot_id, float val);
+    void set(const char * slot_str, float val);
+    void set(const char * slot_str, size_t hashed_str, float val);
 
-    void set_control_array(slot_index_t slot_str, size_t count, float * val) override;
-    void set_control_array(const char * slot_str, size_t count, float * val) override;
-    void set_control_array(const char * slot_str, size_t hashed_str, size_t count, float * val) override;
+    void set_control_array(slot_index_t slot_str, size_t count, float * val);
+    void set_control_array(const char * slot_str, size_t count, float * val);
+    void set_control_array(const char * slot_str, size_t hashed_str, size_t count, float * val);
 
-    void set_control_array_element(slot_index_t slot_str, size_t count, float val) override;
-    void set_control_array_element(const char * slot_str, size_t count, float val) override;
-    void set_control_array_element(const char * slot_str, size_t hashed_str, size_t count, float val) override;
+    void set_control_array_element(slot_index_t slot_str, size_t count, float val);
+    void set_control_array_element(const char * slot_str, size_t count, float val);
+    void set_control_array_element(const char * slot_str, size_t hashed_str, size_t count, float val);
 
     /* move node to head or tail of target */
     template <node_position Position>
@@ -261,7 +263,7 @@ public:
         assert((Relation == before) || (Relation == after));
         abstract_group * target_parent = node->get_parent();
 
-        if (Relation == after && target->next_node() == nullptr) {
+        if (Relation == after && target->next_node() == NULL) {
             // for the sake of simplicity, move the node to the tail of the target's parent group
             move_to_head_or_tail<tail>(node, target_parent);
             return;
@@ -294,7 +296,7 @@ public:
     }
 
     friend class node_graph;
-    std::size_t child_synth_count = 0, child_group_count = 0;
+    std::size_t child_synth_count, child_group_count;
 };
 
 
@@ -307,7 +309,7 @@ inline void server_node::clear_parent(void)
         static_cast<abstract_group*>(this)->unregister_as_child();
     }
 
-    parent_ = nullptr;
+    parent_ = 0;
     release();
 }
 
@@ -367,12 +369,12 @@ public:
     }
 
 private:
-    void add_child(server_node * node, node_position_constraint const & constraint) override;
-    void add_child(server_node * node, node_position) override;
+    void add_child(server_node * node, node_position_constraint const & constraint);
+    void add_child(server_node * node, node_position);
 
     friend class dependency_graph_generator;
 
-    virtual int tail_nodes(void) const override
+    virtual int tail_nodes(void) const
     {
         if (empty())
             return 0;
@@ -391,6 +393,8 @@ private:
     }
 };
 
+typedef intrusive_ptr<group> group_ptr;
+
 class parallel_group:
     public abstract_group
 {
@@ -400,10 +404,10 @@ public:
     {}
 
 private:
-    void add_child(server_node * node, node_position_constraint const & constraint) override;
-    void add_child(server_node * node, node_position) override;
+    void add_child(server_node * node, node_position_constraint const & constraint);
+    void add_child(server_node * node, node_position);
 
-    virtual int tail_nodes(void) const override;
+    virtual int tail_nodes(void) const;
 
     friend class dependency_graph_generator;
 };

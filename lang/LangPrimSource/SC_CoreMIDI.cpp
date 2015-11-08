@@ -255,8 +255,7 @@ static void midiProcessPacket(MIDIPacket *pkt, size_t uid)
 				case 0x90 : //noteOn
 					++g->sp; SetInt(g->sp, pkt->data[i+1]); //val1
 					++g->sp; SetInt(g->sp, pkt->data[i+2]); //val2
-// 					runInterpreter(g, pkt->data[i+2] ? s_midiNoteOnAction : s_midiNoteOffAction, 5);
-					runInterpreter(g, s_midiNoteOnAction, 5);
+					runInterpreter(g, pkt->data[i+2] ? s_midiNoteOnAction : s_midiNoteOffAction, 5);
 					i += 3;
 					break;
 				case 0xA0 : //polytouch
@@ -322,24 +321,24 @@ int midiCleanUp();
 
 int initMIDI(int numIn, int numOut)
 {
-	OSStatus err;
-	CFAllocatorRef alloc = CFAllocatorGetDefault();
-	int enc = kCFStringEncodingMacRoman;
+  OSStatus err;
+  CFAllocatorRef alloc = CFAllocatorGetDefault();
+  int enc = kCFStringEncodingMacRoman;
 
 	midiCleanUp();
 	numIn = sc_clip(numIn, 1, kMaxMidiPorts);
 	numOut = sc_clip(numOut, 1, kMaxMidiPorts);
-
+  
 	if (!gMIDIClient) {
-		CFStringRef clientName = CFStringCreateWithCString(alloc, "SuperCollider", enc);
+    CFStringRef clientName = CFStringCreateWithCString(alloc, "SuperCollider", enc);
 
-		err = MIDIClientCreate(clientName, midiNotifyProc, nil, &gMIDIClient);
-		if (err) {
-			post("Could not create MIDI client. error: ");
-			return errFailed;
-		}
-		CFRelease(clientName);
-	}
+    err = MIDIClientCreate(clientName, midiNotifyProc, nil, &gMIDIClient);
+    if (err) {
+      post("Could not create MIDI client. error: ");
+      return errFailed;
+    }
+    CFRelease(clientName);
+  }
 
 	for (int i=0; i<numIn; ++i) {
 		char str[32];
@@ -433,27 +432,27 @@ int prListMIDIEndpoints(struct VMGlobals *g, int numArgsPushed)
 
 	PyrObject* idarraySo = newPyrArray(g->gc, numSrc * sizeof(SInt32), 0 , true);
 		SetObject(idarray->slots+idarray->size++, idarraySo);
-		g->gc->GCWriteNew(idarray, idarraySo); // we know idarraySo is white so we can use GCWriteNew
+		g->gc->GCWrite(idarray, idarraySo);
 
 	PyrObject* devarraySo = newPyrArray(g->gc, numSrc * sizeof(PyrObject), 0 , true);
 		SetObject(idarray->slots+idarray->size++, devarraySo);
-		g->gc->GCWriteNew(idarray, devarraySo); // we know devarraySo is white so we can use GCWriteNew
+		g->gc->GCWrite(idarray, devarraySo);
 
 		PyrObject* namearraySo = newPyrArray(g->gc, numSrc * sizeof(PyrObject), 0 , true);
 		SetObject(idarray->slots+idarray->size++, namearraySo);
-		g->gc->GCWriteNew(idarray, namearraySo); // we know namearraySo is white so we can use GCWriteNew
+		g->gc->GCWrite(idarray, namearraySo);
 
 	PyrObject* idarrayDe = newPyrArray(g->gc, numDst * sizeof(SInt32), 0 , true);
 		SetObject(idarray->slots+idarray->size++, idarrayDe);
-		g->gc->GCWriteNew(idarray, idarrayDe); // we know idarrayDe is white so we can use GCWriteNew
+		g->gc->GCWrite(idarray, idarrayDe);
 
 	PyrObject* namearrayDe = newPyrArray(g->gc, numDst * sizeof(PyrObject), 0 , true);
 		SetObject(idarray->slots+idarray->size++, namearrayDe);
-		g->gc->GCWriteNew(idarray, namearrayDe); // we know namearrayDe is white so we can use GCWriteNew
+		g->gc->GCWrite(idarray, namearrayDe);
 
 	PyrObject* devarrayDe = newPyrArray(g->gc, numDst * sizeof(PyrObject), 0 , true);
 		SetObject(idarray->slots+idarray->size++, devarrayDe);
-		g->gc->GCWriteNew(idarray, devarrayDe); // we know devarrayDe is white so we can use GCWriteNew
+		g->gc->GCWrite(idarray, devarrayDe);
 
 
 	for (int i=0; i<numSrc; ++i) {
@@ -489,12 +488,12 @@ int prListMIDIEndpoints(struct VMGlobals *g, int numArgsPushed)
 		PyrString *string = newPyrString(g->gc, cendname, 0, true);
 		SetObject(namearraySo->slots+i, string);
 		namearraySo->size++;
-		g->gc->GCWriteNew(namearraySo, (PyrObject*)string); // we know string is white so we can use GCWriteNew
+		g->gc->GCWrite(namearraySo, (PyrObject*)string);
 
 		PyrString *devstring = newPyrString(g->gc, cdevname, 0, true);
 		SetObject(devarraySo->slots+i, devstring);
 		devarraySo->size++;
-		g->gc->GCWriteNew(devarraySo, (PyrObject*)devstring); // we know devString is white so we can use GCWriteNew
+		g->gc->GCWrite(devarraySo, (PyrObject*)devstring);
 
 		SetInt(idarraySo->slots+i, id);
 		idarraySo->size++;
@@ -539,12 +538,12 @@ int prListMIDIEndpoints(struct VMGlobals *g, int numArgsPushed)
 
 		PyrString *string = newPyrString(g->gc, cendname, 0, true);
 		SetObject(namearrayDe->slots+namearrayDe->size++, string);
-		g->gc->GCWriteNew(namearrayDe, (PyrObject*)string); // we know string is white so we can use GCWriteNew
+		g->gc->GCWrite(namearrayDe, (PyrObject*)string);
 
 		PyrString *devstring = newPyrString(g->gc, cdevname, 0, true);
 
 		SetObject(devarrayDe->slots+devarrayDe->size++, devstring);
-		g->gc->GCWriteNew(devarrayDe, (PyrObject*)devstring); // we know devstring is white so we can use GCWriteNew
+		g->gc->GCWrite(devarrayDe, (PyrObject*)devstring);
 
 		SetInt(idarrayDe->slots+idarrayDe->size++, id);
 

@@ -290,7 +290,8 @@ inline float32 sc_ceil(float32 x)
 {
 #ifdef __SSE4_1__
 	__m128 a = _mm_set_ss(x);
-	__m128 b = _mm_round_ss(a, a, _MM_FROUND_TO_POS_INF);
+	const int cntrl = _MM_FROUND_TO_POS_INF;
+	__m128 b = _mm_round_ss(a, a, cntrl);
 	return _mm_cvtss_f32(b);
 #else
 	return std::ceil(x);
@@ -301,7 +302,8 @@ inline float32 sc_floor(float32 x)
 {
 #ifdef __SSE4_1__
 	__m128 a = _mm_set_ss(x);
-	__m128 b = _mm_round_ss(a, a, _MM_FROUND_TO_NEG_INF);
+	const int cntrl = _MM_FROUND_TO_NEG_INF;
+	__m128 b = _mm_round_ss(a, a, cntrl);
 	return _mm_cvtss_f32(b);
 #else
 	return std::floor(x);

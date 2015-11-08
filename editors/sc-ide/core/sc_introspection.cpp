@@ -49,8 +49,8 @@ Introspection::Introspection( QString const & yamlString )
 
 void Introspection::initPaths()
 {
-    mUserExtensionDir = standardDirectory(ScExtensionUserDir) + QStringLiteral("/");
-    mSystemExtensionDir = standardDirectory(ScExtensionSystemDir) + QStringLiteral("/");
+    mUserExtensionDir = standardDirectory(ScExtensionUserDir) + QString("/");
+    mSystemExtensionDir = standardDirectory(ScExtensionSystemDir) + QString("/");
 }
 
 Introspection::~Introspection()
@@ -192,10 +192,10 @@ QString Introspection::compactLibraryPath(QString const & path) const
         return path.mid(mClassLibraryPath.length());
 
     if (path.startsWith(mUserExtensionDir))
-        return QStringLiteral("Extensions/") + path.mid(mUserExtensionDir.length());
+        return QString("Extensions/") + path.mid(mUserExtensionDir.length());
 
     if (path.startsWith(mSystemExtensionDir))
-        return QStringLiteral("Extensions/") + path.mid(mSystemExtensionDir.length());
+        return QString("Extensions/") + path.mid(mSystemExtensionDir.length());
 
     return path;
 }
@@ -294,12 +294,6 @@ Introspection::ClassMethodMap Introspection::constructMethodMap(const Class * kl
     }
     return methodMap;
 }
-  
-bool Method::matches(const QString& toMatch) const
-{
-    return toMatch.isEmpty() ? true : name.get().startsWith(toMatch, Qt::CaseInsensitive);
-}
-
 
 QString Method::signature( SignatureStyle style ) const
 {

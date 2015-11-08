@@ -1,4 +1,5 @@
-AccelerometerX : UGen {
+AccelerometerX : UGen
+{
 	// warp 0 = linear
 	// warp 1 = exponential
 	*kr {

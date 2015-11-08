@@ -1,6 +1,7 @@
 //Partitioned Convolution
 
-PartConv : UGen {
+PartConv : UGen
+{
 	*ar { arg in, fftsize, irbufnum,mul = 1.0, add = 0.0;
 		^this.multiNew('audio', in, fftsize, irbufnum).madd(mul, add);
 	}

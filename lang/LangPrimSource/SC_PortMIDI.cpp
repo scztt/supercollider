@@ -77,6 +77,8 @@ PmStream* gMIDIOutStreams[kMaxMidiPorts];
 
 std::map<int,int> gMidiInputIndexToPmDevIndex;
 std::map<int,int> gMidiOutputIndexToPmDevIndex;
+std::map<int,int> gMidiPmDevIndexToInputIndex;
+std::map<int,int> gMidiPmDevIndexToOutputIndex;
 SC_Lock gPmStreamMutex;
 
 /* if INPUT_BUFFER_SIZE is 0, PortMidi uses a default value */
@@ -91,24 +93,29 @@ SC_Lock gPmStreamMutex;
 
 extern bool compiledOK;
 
+inline void TPmErr(PmError err) {
+	if( err != pmNoError)
+	throw err;
+}
+
 /* timer "interrupt" for processing midi data */
 static void PMProcessMidi(PtTimestamp timestamp, void *userData)
 {
 	lock_guard<SC_Lock> mulo(gPmStreamMutex);
+	PmError result;
 	PmEvent buffer; /* just one message at a time */
 
-	for( int i = 0 ; i < gNumMIDIInPorts; ++i ) {
+	for( int i = 0 ; i < gNumMIDIInPorts; ++i )
+	{
+		int pmdid = gMidiInputIndexToPmDevIndex[i];
 		PmStream* midi_in = gMIDIInStreams[i];
-		if( midi_in ) {
-			while(const PmError result = Pm_Poll(midi_in)) {
-				if (result != pmGotData) {
-					std::printf("errrr %s\n", Pm_GetErrorText(result));
-					continue;
-				}
-
+		if( midi_in )
+		{
+			while(result = Pm_Poll(midi_in))
+			{
 				long Tstatus, data1, data2;
 				if (Pm_Read(midi_in, &buffer, 1) == pmBufferOverflow) 
-					continue;
+				continue;
 				// unless there was overflow, we should have a message now 
 
 				Tstatus = Pm_MessageStatus(buffer.message);
@@ -130,7 +137,7 @@ static void PMProcessMidi(PtTimestamp timestamp, void *userData)
 					++g->sp; SetObject(g->sp, s_midiin->u.classobj); // Set the class MIDIIn
 					//set arguments: 
 
-					++g->sp; SetInt(g->sp,  i); //src
+					++g->sp; SetInt(g->sp,  pmdid); //src
 					// ++g->sp;  SetInt(g->sp, status); //status
 					++g->sp;  SetInt(g->sp, chan); //chan
 
@@ -146,8 +153,7 @@ static void PMProcessMidi(PtTimestamp timestamp, void *userData)
 					case 0x90 : //noteOn 
 						++g->sp; SetInt(g->sp, data1);
 						++g->sp; SetInt(g->sp, data2);
-// 						runInterpreter(g, data2 ? s_midiNoteOnAction : s_midiNoteOffAction, 5);
-						runInterpreter(g, s_midiNoteOnAction, 5);
+						runInterpreter(g, data2 ? s_midiNoteOnAction : s_midiNoteOffAction, 5);
 						break;
 					case 0xA0 : //polytouch
 						++g->sp; SetInt(g->sp, data1);
@@ -199,55 +205,45 @@ static void PMProcessMidi(PtTimestamp timestamp, void *userData)
 /*
 -------------------------------------------------------------
 */
-static void midiCleanUp();
-static int initMIDI()
+void midiCleanUp();
+int initMIDI()
 {
-	midiCleanUp();
+	try {
+		midiCleanUp();
 
-	lock_guard<SC_Lock> mulo(gPmStreamMutex);
-	const PmError initializationError = Pm_Initialize();
-	if (initializationError) {
-		std::printf("MIDI: cannot open midi backend %s\n", Pm_GetErrorText(initializationError));
-		return errFailed;
-	}
+		TPmErr(Pm_Initialize());
+		int nbDev = Pm_CountDevices();
+		int inIndex = 0;
+		int outIndex = 0;
+		int pmdid;
 
-	int inIndex = 0;
-	int outIndex = 0;
-
-	for( int i = 0; i < Pm_CountDevices(); ++i ) {
-		const PmDeviceInfo* devInfo = Pm_GetDeviceInfo(i);
-		if( devInfo->input )
-		{
-			gNumMIDIInPorts++;
-			gMidiInputIndexToPmDevIndex[inIndex++] = i;
-		}
-		if( devInfo->output )
-		{
-			gNumMIDIOutPorts++;
-			gMidiOutputIndexToPmDevIndex[outIndex++] = i;
-		}
-	}
-
-	for( int i = 0; i < gNumMIDIOutPorts; i++) {
-		const int pmdid = gMidiOutputIndexToPmDevIndex[i];
-		const PmError error = Pm_OpenOutput(&gMIDIOutStreams[i], pmdid, NULL, 512, NULL, NULL, 0);
-
-		const PmDeviceInfo* devInfo = Pm_GetDeviceInfo(i);
-
-		if( error ) {
-			std::printf("MIDI: cannot open device %d %d %s\n", i, pmdid, Pm_GetErrorText(error));
-
-			int hostError;
-			if( (hostError = Pm_HasHostError(nullptr)) ) {
-				char hostErrorString[PM_HOST_ERROR_MSG_LEN];
-				Pm_GetHostErrorText(hostErrorString, PM_HOST_ERROR_MSG_LEN);
-				std::printf("MIDI: Host error %s\n", hostErrorString);
+		for( int i = 0; i < nbDev ; ++i ) {
+			const PmDeviceInfo* devInfo = Pm_GetDeviceInfo(i);
+			if( devInfo->input )
+			{
+				gNumMIDIInPorts++;
+				gMidiInputIndexToPmDevIndex[inIndex++] = i;
+				gMidiPmDevIndexToInputIndex[i] = inIndex;
+			}
+			if( devInfo->output )
+			{
+				gNumMIDIOutPorts++;
+				gMidiOutputIndexToPmDevIndex[outIndex++] = i;
+				gMidiPmDevIndexToOutputIndex[i] = outIndex;
 			}
 		}
-	}
 
-	/* will call our function, PMProcessMidi() every millisecond */
-	Pt_Start(1, &PMProcessMidi, 0); /* start a timer with millisecond accuracy */
+		for( int i = 0; i < gNumMIDIOutPorts; i++) {
+			pmdid = gMidiOutputIndexToPmDevIndex[i];
+			Pm_OpenOutput(&gMIDIOutStreams[i], pmdid, NULL, 512, NULL, NULL, 0);
+		}
+
+		/* will call our function, PMProcessMidi() every millisecond */
+		Pt_Start(1, &PMProcessMidi, 0); /* start a timer with millisecond accuracy */
+	}
+	catch(PmError) {
+		return errFailed;
+	}
 
 	gMIDIInitialized = true;
 	return errNone;
@@ -255,7 +251,7 @@ static int initMIDI()
 /*
 -------------------------------------------------------------
 */
-static void midiCleanUp()
+void midiCleanUp()
 {
 	lock_guard<SC_Lock> mulo(gPmStreamMutex);
 
@@ -280,6 +276,8 @@ static void midiCleanUp()
 	// delete the objects that map in/out indices to Pm dev indices
 	gMidiInputIndexToPmDevIndex.clear();
 	gMidiOutputIndexToPmDevIndex.clear();
+	gMidiPmDevIndexToInputIndex.clear();
+	gMidiPmDevIndexToOutputIndex.clear();
 
 	gMIDIInitialized = false;
 }
@@ -377,6 +375,7 @@ int prListMIDIEndpoints(struct VMGlobals *g, int numArgsPushed)
 		g->gc->GCWrite(devarrayDe, (PyrObject*)devstring);
 
 		SetInt(idarrayDe->slots+idarrayDe->size++, i);
+
 	}
 	return errNone;
 }
@@ -396,34 +395,24 @@ int prConnectMIDIIn(struct VMGlobals *g, int numArgsPushed)
 	int err, inputIndex, uid;
 	err = slotIntVal(b, &inputIndex);
 	if (err) return errWrongType;
-	if (inputIndex < 0 || inputIndex >= gNumMIDIInPorts)
-		return errIndexOutOfRange;
+	if (inputIndex < 0 || inputIndex >= gNumMIDIInPorts) 
+	return errIndexOutOfRange;
 
 	err = slotIntVal(c, &uid);
-	if (err)
-		return errWrongType;
+	if (err) 
+	return errWrongType;
 
 	PmStream* inStream = NULL;
 	int pmdid = gMidiInputIndexToPmDevIndex[uid];
 
-	const PmError error = Pm_OpenInput( &inStream, pmdid,
-										PMSTREAM_DRIVER_INFO,
-										PMSTREAM_INPUT_BUFFER_SIZE,
-										PMSTREAM_TIME_PROC,
-										PMSTREAM_TIME_INFO );
+	PmError pmerr = Pm_OpenInput( &inStream, pmdid, 
+	PMSTREAM_DRIVER_INFO,
+	PMSTREAM_INPUT_BUFFER_SIZE,
+	PMSTREAM_TIME_PROC,
+	PMSTREAM_TIME_INFO );
 
-	if(error) {
-		std::printf("cannot open MIDI input: %s\n", Pm_GetErrorText(error));
-
-		int hostError;
-		if( (hostError = Pm_HasHostError(nullptr)) ) {
-			char hostErrorString[PM_HOST_ERROR_MSG_LEN];
-			Pm_GetHostErrorText(hostErrorString, PM_HOST_ERROR_MSG_LEN);
-			std::printf("MIDI: Host error %s\n", hostErrorString);
-		}
-
-		return errFailed;
-	}
+	if(pmerr != pmNoError)
+	return errFailed;
 
 	gMIDIInStreams[uid] = inStream;
 	return errNone;
@@ -443,18 +432,17 @@ int prDisconnectMIDIIn(struct VMGlobals *g, int numArgsPushed)
 	if (err) return err;
 	if (inputIndex < 0 || inputIndex >= gNumMIDIInPorts) return errIndexOutOfRange;
 	err = slotIntVal(c, &uid);
-	if (err)
-		return err;
+	if (err) 
+	return err;
 
-	const PmError error = Pm_Close(gMIDIInStreams[uid]);
+	PmError pmerr = Pm_Close(gMIDIInStreams[uid]);
 
-	if(error) {
-		std::printf("cannot close MIDI device: %s\n", Pm_GetErrorText(error));
-		return errFailed;
-	}
+	if(pmerr != pmNoError)
+	return errFailed;
 
 	gMIDIInStreams[uid] = NULL;
 	return errNone;
+
 }
 /*
 -------------------------------------------------------------
@@ -470,8 +458,8 @@ int prInitMIDI(struct VMGlobals *g, int numArgsPushed)
 	if (err) return errWrongType;
 
 	err = slotIntVal(c, &numOut);
-	if (err)
-		return errWrongType;
+	if (err) 
+	return errWrongType;
 
 	return initMIDI();
 }
@@ -613,7 +601,3 @@ void initMIDIPrimitives()
 	midiCleanUp();
 }
 
-void deinitMIDIPrimitives()
-{
-	midiCleanUp();
-}

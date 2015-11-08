@@ -22,7 +22,6 @@
 #define SC_OSCUTILS_HPP
 
 #include "SC_ReplyImpl.hpp"
-#include <cinttypes>
 
 static bool dumpOSCmsg(int inSize, char* inData, bool skipStatus = false)
 {
@@ -32,7 +31,7 @@ static bool dumpOSCmsg(int inSize, char* inData, bool skipStatus = false)
 	if (inData[0]) {
 		const char *addr = inData;
 		if (skipStatus) {
-			if (strcmp(addr, "/status") == 0 || strcmp(addr, "status") == 0) // skip /status messages
+			if (strcmp(addr, "/status") == 0) // skip /status messages
 				return false; // nothing has been printed
 		}
 
@@ -86,7 +85,7 @@ static bool dumpOSCmsg(int inSize, char* inData, bool skipStatus = false)
 			scprintf(" %c", (char)msg.geti());
 			break;
 		case 't' :
-			scprintf(" %" PRId64 "", msg.gett());
+			scprintf(" %lld", msg.gett());
 			break;
 		case 'T' :
 			scprintf(" true");
@@ -156,7 +155,7 @@ static bool dumpOSCbndl(int indent, int size, char *inData)
 	char* data = inData + 8;
 	char* dataEnd = inData + size;
 
-	scprintf("[ \"#bundle\", %" PRIu64 ", ", OSCtime(data));
+	scprintf("[ \"#bundle\", %llu, ", OSCtime(data));
 	data += 8;
 	while (data < dataEnd) {
 		int contentPrinted;

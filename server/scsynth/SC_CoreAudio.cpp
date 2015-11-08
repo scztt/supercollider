@@ -81,7 +81,7 @@ static void syncOSCOffsetWithTimeOfDay()
 	// Then if this machine is synced via NTP, we are synced with the world.
 	// more accurate way to do this??
 
-    using namespace std::chrono;
+    using namespace chrono;
 	struct timeval tv;
 
     nanoseconds systemTimeBefore, systemTimeAfter;
@@ -535,42 +535,6 @@ SC_CoreAudioDriver::~SC_CoreAudioDriver()
 	}
 }
 
-std::vector<AudioValueRange> GetAvailableNominalSampleRates(const AudioDeviceID& device) {
-	std::vector<AudioValueRange>	result;
-	OSStatus						err;
-	UInt32							size;
-	UInt32							count;
-	std::auto_ptr<AudioValueRange>	validSampleRateRanges;
-	
-	AudioObjectPropertyAddress addr = {
-		kAudioDevicePropertyAvailableNominalSampleRates,
-		kAudioObjectPropertyScopeGlobal,
-		kAudioObjectPropertyElementMaster
-	};
-	
-	err = AudioObjectGetPropertyDataSize(device, &addr, 0, NULL, &size);
-	
-	if (err != kAudioHardwareNoError) {
-		scprintf("get kAudioDevicePropertyAvailableNominalSampleRates data size error %4.4s\n", (char*)&err);
-	} else {
-		if (size > 0) {
-			count = size / sizeof(AudioValueRange);
-			validSampleRateRanges.reset(new AudioValueRange[count]);
-			
-			err = AudioObjectGetPropertyData(device, &addr, 0, NULL, &size, validSampleRateRanges.get());
-			if (err != kAudioHardwareNoError) {
-				scprintf("get kAudioDevicePropertyAvailableNominalSampleRates error %4.4s\n", (char*)&err);
-			} else {
-				for (int i = 0; i < count; i++) {
-					result.push_back(validSampleRateRanges.get()[i]);
-				}
-			}
-		}
-	}
-	
-	return result;
-}
-
 bool SC_CoreAudioDriver::DriverSetup(int* outNumSamplesPerCallback, double* outSampleRate)
 {
 	OSStatus	err = kAudioHardwareNoError;
@@ -782,112 +746,28 @@ bool SC_CoreAudioDriver::DriverSetup(int* outNumSamplesPerCallback, double* outS
 	{
 		Float64 sampleRate = mPreferredSampleRate;
 		count = sizeof(Float64);
+		//err = AudioDeviceSetProperty(mOutputDevice, &now, 0, false, kAudioDevicePropertyNominalSampleRate, count, &sampleRate);
 
-		bool sampleRateSupported = false;
-		auto availableSampleRates = GetAvailableNominalSampleRates(mOutputDevice);
-		
-		// If we've got two devices, we need to use a sample rate list from both
-		//  This won't account for cases where there are overlapping ranges, but
-		//  that seems sufficiently edge-case to ignore for now.
-		if (UseSeparateIO()) {
-			auto inputSampleRates = GetAvailableNominalSampleRates(mInputDevice);
+		propertyAddress.mSelector = kAudioDevicePropertyNominalSampleRate;
+		propertyAddress.mScope = kAudioDevicePropertyScopeOutput;
 
-			std::vector<AudioValueRange> availableSampleRatesInputOutput(std::min(availableSampleRates.size(), inputSampleRates.size()));
-			auto rateListIter = std::set_union(
-				availableSampleRates.begin(), availableSampleRates.end(),
-				inputSampleRates.begin(), inputSampleRates.end(),
-				availableSampleRatesInputOutput.begin(),
-				[](const AudioValueRange& lhs, const AudioValueRange& rhs) {
-					return (lhs.mMaximum != rhs.mMaximum) ? (lhs.mMaximum < rhs.mMaximum) : (lhs.mMinimum < rhs.mMinimum);
-				}
-			);
-			
-			availableSampleRatesInputOutput.resize(rateListIter - availableSampleRatesInputOutput.begin());
-			availableSampleRates = availableSampleRatesInputOutput;
+		err = AudioObjectSetPropertyData(mOutputDevice, &propertyAddress, 0, NULL, count, &sampleRate);
+
+		if (err != kAudioHardwareNoError) {
+			scprintf("set kAudioDevicePropertyNominalSampleRate error %4.4s\n", (char*)&err);
+			//return false;
 		}
-		
-		for (const AudioValueRange& range : availableSampleRates) {
-			if (mPreferredSampleRate >= range.mMinimum && mPreferredSampleRate <= range.mMaximum) {
-				sampleRateSupported = true;
-				break;
-			}
-		}
-		
-		if (!sampleRateSupported) {
-			#define SR_MAX_VALUE  9999999
-			#define SR_MIN_VALUE -9999999
-			
-			Float64 nextHighestMatch = SR_MAX_VALUE;
-			Float64 nextLowestMatch = SR_MIN_VALUE;
-			
-			for (const AudioValueRange& range : availableSampleRates) {
-				if (range.mMinimum > mPreferredSampleRate && range.mMinimum < nextHighestMatch) {
-					nextHighestMatch = range.mMinimum;
-				}
-				if (range.mMaximum < mPreferredSampleRate && range.mMaximum > nextLowestMatch) {
-					nextLowestMatch = range.mMaximum;
-				}
-			}
-			
-			if (nextHighestMatch != SR_MAX_VALUE) {
-				sampleRate = nextHighestMatch;
-				sampleRateSupported = true;
-			} else if(nextLowestMatch != SR_MIN_VALUE) {
-				sampleRate = nextLowestMatch;
-				sampleRateSupported = true;
-			} else {
-				sampleRateSupported = false;
-			}
-			
-			if (sampleRateSupported) {
-				scprintf("Requested sample rate %f was not available - attempting to use sample rate of %f\n", (double)mPreferredSampleRate, (double)sampleRate);
-			} else {
-				scprintf("Could not set requested sample rate of %f\n", (double)mPreferredSampleRate);
-				scprintf("Available sample rates:\n");
-				for (const AudioValueRange& range : availableSampleRates) {
-					if (range.mMaximum == range.mMinimum) {
-						scprintf("\t%f\n", range.mMaximum);
-					} else {
-						scprintf("\t%f - %f\n", range.mMinimum, range.mMaximum);
-					}
-				}
-			}
-		}
-		
-		// Requested sample rate is available - we're going to set and, if we don't hit an error,
-		// assume that our set was successful.
-		if (sampleRateSupported) {
-			bool sampleRateSetSuccess = true;
-			
+		if (UseSeparateIO())
+		{
+			count = sizeof(Float64);
+			//err = AudioDeviceSetProperty(mInputDevice, &now, 0, false, kAudioDevicePropertyNominalSampleRate, count, &sampleRate);
 			propertyAddress.mSelector = kAudioDevicePropertyNominalSampleRate;
-			propertyAddress.mScope = kAudioDevicePropertyScopeOutput;
+			propertyAddress.mScope = kAudioDevicePropertyScopeInput;
 
-			err = AudioObjectSetPropertyData(mOutputDevice, &propertyAddress, 0, NULL, count, &sampleRate);
-
+			err = AudioObjectSetPropertyData(mInputDevice, &propertyAddress, 0, NULL, count, &sampleRate);
 			if (err != kAudioHardwareNoError) {
-				sampleRateSetSuccess = false;
 				scprintf("set kAudioDevicePropertyNominalSampleRate error %4.4s\n", (char*)&err);
-			}
-			
-			if (UseSeparateIO())
-			{
-				count = sizeof(Float64);
-
-				propertyAddress.mSelector = kAudioDevicePropertyNominalSampleRate;
-				propertyAddress.mScope = kAudioDevicePropertyScopeInput;
-
-				err = AudioObjectSetPropertyData(mInputDevice, &propertyAddress, 0, NULL, count, &sampleRate);
-				
-				if (err != kAudioHardwareNoError) {
-					sampleRateSetSuccess = false;
-					scprintf("set kAudioDevicePropertyNominalSampleRate error %4.4s\n", (char*)&err);
-				}
-			}
-			
-			if (sampleRateSetSuccess) {
-				mExplicitSampleRate = sampleRate;
-			} else {
-				return false;
+				//return false;
 			}
 		}
 	}
@@ -933,7 +813,7 @@ bool SC_CoreAudioDriver::DriverSetup(int* outNumSamplesPerCallback, double* outS
 			return false;
 		}
 
-		if (!mExplicitSampleRate && inputStreamDesc.mSampleRate != outputStreamDesc.mSampleRate) {
+		if (inputStreamDesc.mSampleRate != outputStreamDesc.mSampleRate) {
 			scprintf("input and output sample rates do not match. %g != %g\n", inputStreamDesc.mSampleRate, outputStreamDesc.mSampleRate);
 			return false;
 		}
@@ -1155,11 +1035,7 @@ bool SC_CoreAudioDriver::DriverSetup(int* outNumSamplesPerCallback, double* outS
 	}
 
 	*outNumSamplesPerCallback = mHardwareBufferSize / outputStreamDesc.mBytesPerFrame;
-	if (mExplicitSampleRate) {
-		*outSampleRate = mExplicitSampleRate.get();
-	} else {
-		*outSampleRate = outputStreamDesc.mSampleRate;
-	}
+	*outSampleRate = outputStreamDesc.mSampleRate;
 
 	if(mWorld->mVerbosity >= 1){
 		scprintf("<-SC_CoreAudioDriver::Setup world %p\n", mWorld);

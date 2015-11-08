@@ -10,7 +10,7 @@ MIDIEndPoint {
 }
 
 MIDIClient {
-	classvar <myinports, <myoutports; // for linux it is useful to keep track of how many we open ourselves
+   classvar <myinports, <myoutports; // for linux it is useful to keep track of how many we open ourselves
 	classvar <sources, <destinations;
 	classvar <initialized=false;
 	*init { arg inports, outports; // by default initialize all available ports
@@ -20,7 +20,7 @@ MIDIClient {
 		this.list;
 		if(inports.isNil,{inports = sources.size});
 		if(outports.isNil,{outports = destinations.size});
-		// this.disposeClient;
+//			this.disposeClient;
 
 		this.prInit(inports,outports);
 		initialized = true;
@@ -35,8 +35,8 @@ MIDIClient {
 				++ " outport(s).").postln;
 			"Some expected MIDI devices may not be available.".postln;
 		});
-		myinports = inports;
-		myoutports = outports;
+      myinports = inports;
+      myoutports = outports;
 
 		this.list;
 
@@ -78,15 +78,6 @@ MIDIClient {
 	*restart {
 		_RestartMIDI
 		^this.primitiveFailed
-	}
-
-	// overridden in Linux:
-	*externalSources{
-		^sources;
-	}
-
-	*externalDestinations{
-		^destinations;
 	}
 }
 
@@ -131,9 +122,6 @@ MIDIIn {
 	<> noteOnList, <> noteOffList, <> polyList,
 	<> controlList, <> programList,
 	<> touchList, <> bendList;
-
-	classvar
-	<> noteOnZeroAsNoteOff = true;
 
 	// safer than global setters
 	*addFuncTo { |what, func|
@@ -202,13 +190,8 @@ MIDIIn {
 		action.value(src, status, a, b, c);
 	}
 	*doNoteOnAction { arg src, chan, num, veloc;
-		if ( noteOnZeroAsNoteOff and: ( veloc == 0 ) ){
-			noteOff.value(src, chan, num, veloc);
-			this.prDispatchEvent(noteOffList, \noteOff, src, chan, num, veloc);
-		}{
-			noteOn.value(src, chan, num, veloc);
-			this.prDispatchEvent(noteOnList, \noteOn, src, chan, num, veloc);
-		};
+		noteOn.value(src, chan, num, veloc);
+		this.prDispatchEvent(noteOnList, \noteOn, src, chan, num, veloc);
 	}
 	*doNoteOffAction { arg src, chan, num, veloc;
 		noteOff.value(src, chan, num, veloc);
@@ -257,14 +240,12 @@ MIDIIn {
 	*findPort { arg deviceName,portName;
 		^MIDIClient.sources.detect({ |endPoint| endPoint.device == deviceName and: {endPoint.name == portName}});
 	}
-
 	*connectAll {
 		if(MIDIClient.initialized.not,{ MIDIClient.init });
-		MIDIClient.externalSources.do({ |src,i|
+		MIDIClient.sources.do({ |src,i|
 			MIDIIn.connect(i,src);
 		});
 	}
-
 	*connect { arg inport=0, device=0;
 		var uid,source;
 		if(MIDIClient.initialized.not,{ MIDIClient.init });
@@ -369,15 +350,15 @@ MIDIOut {
 				("Failed to find MIDIOut port " + deviceName + portName).warn;
 			});
 		});
-		if(thisProcess.platform.name != \linux) {
-			^this.new(index,endPoint.uid)
-		} {
-			if (index < MIDIClient.myoutports){
-				^this.new(index,endPoint.uid)
-			} {
-				^this.new(0,endPoint.uid)
-			}
-		}
+      if(thisProcess.platform.name != \linux) {
+         ^this.new(index,endPoint.uid)
+      }{
+         if ( index < MIDIClient.myoutports ){
+            ^this.new(index,endPoint.uid)
+         }{
+            ^this.new(0,endPoint.uid)
+         }
+      }
 	}
 	*findPort { arg deviceName,portName;
 		^MIDIClient.destinations.detect({ |endPoint| endPoint.device == deviceName and: {endPoint.name == portName}});

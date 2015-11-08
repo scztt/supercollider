@@ -130,7 +130,7 @@ JITGui {
 	}
 
 	makeZone {
-		zone = CompositeView(parent, bounds).background_(skin.background);
+		zone = CompositeView(parent, bounds).background_(Color.white);
 		zone.addFlowLayout(skin.margin, skin.gap);
 		zone.resize_(2);
 		zone.background_(skin.foreground);
@@ -148,7 +148,7 @@ JITGui {
 		skipjack = SkipJack({
 			this.checkUpdate
 		},
-		0.1,
+		0.5,
 		{ parent.isNil or: { parent.isClosed } },
 		this.getName
 		);

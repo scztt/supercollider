@@ -60,7 +60,7 @@ InternalSynthServerGlobals gInternalSynthServer = { 0, kNumDefaultSharedControls
 
 SC_UdpInPort* gUDPport = 0;
 
-PyrString* newPyrString(VMGlobals *g, char *s, int flags, bool runGC);
+PyrString* newPyrString(VMGlobals *g, char *s, int flags, bool collect);
 
 PyrSymbol *s_call, *s_write, *s_recvoscmsg, *s_recvoscbndl, *s_netaddr;
 extern bool compiledOK;
@@ -397,18 +397,13 @@ static int prNetAddr_Connect(VMGlobals *g, int numArgsPushed)
 
 static int prNetAddr_Disconnect(VMGlobals *g, int numArgsPushed)
 {
-	int err;
-	
 	PyrSlot* netAddrSlot = g->sp;
 	PyrObject* netAddrObj = slotRawObject(netAddrSlot);
 
 	SC_TcpClientPort *comPort = (SC_TcpClientPort*)slotRawPtr(netAddrObj->slots + ivxNetAddr_Socket);
-	if (comPort) {
-		err = comPort->Close();
-		SetPtr(netAddrObj->slots + ivxNetAddr_Socket, NULL);
-	}
+	if (comPort) comPort->Close();
 
-	return err;
+	return errNone;
 }
 
 
@@ -564,12 +559,12 @@ static int prArray_OSCBytes(VMGlobals *g, int numArgsPushed)
 // Create a new <PyrInt8Array> object and copy data from `msg.getb'.
 // Bytes are properly untyped, but there is no <UInt8Array> type.
 
-static PyrInt8Array* MsgToInt8Array ( sc_msg_iter& msg, bool runGC ) ;
-static PyrInt8Array* MsgToInt8Array ( sc_msg_iter& msg, bool runGC )
+static PyrInt8Array* MsgToInt8Array ( sc_msg_iter& msg ) ;
+static PyrInt8Array* MsgToInt8Array ( sc_msg_iter& msg )
 {
 	int size = msg.getbsize() ;
 	VMGlobals *g = gMainVMGlobals ;
-	PyrInt8Array *obj = newPyrInt8Array ( g->gc , size , 0 , runGC ) ;
+	PyrInt8Array *obj = newPyrInt8Array ( g->gc , size , 0 , true ) ;
 	obj->size = size ;
 	msg.getb ( (char *)obj->b , obj->size ) ;
 	return obj ;
@@ -621,7 +616,7 @@ static PyrObject* ConvertOSCMessage(int inSize, char *inData)
 			break;
 		case 'b' : // fall through
 		case 'm' :
-			SetObject(slots+i+1, (PyrObject*)MsgToInt8Array(msg, false));
+			SetObject(slots+i+1, (PyrObject*)MsgToInt8Array(msg));
 			break;
 		case 'c':
 			SetChar(slots+i+1, (char)msg.geti());
@@ -1037,7 +1032,7 @@ int prQuitInProcessServer(VMGlobals *g, int numArgsPushed)
 		World *world = gInternalSynthServer.mWorld;
 		gInternalSynthServer.mWorld = 0;
 
-		thread thread(std::bind(World_WaitForQuit, world, false));
+		thread thread(std::bind(World_WaitForQuit, world));
 
 		thread.detach();
 	}

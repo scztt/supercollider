@@ -5,28 +5,20 @@ Quarks {
 		<folder,
 		<>additionalFolders,
 		directory,
-		<>directoryUrl="https://github.com/supercollider-quarks/quarks.git",
-		fetched=false,
-		cache,
-		regex,
-		installedPaths;
+		<>directoryUrl="https://raw.githubusercontent.com/supercollider-quarks/quarks/master/directory.txt",
+		cache;
 
 	*install { |name, refspec|
-		var path, quark;
+		var path;
 		if(Quarks.isPath(name).not, {
-			quark = Quark(name, refspec);
-			this.installQuark(quark);
-			^quark
+			this.installQuark(Quark(name, refspec));
 		}, {
 			// local path / ~/ ./
 			path = this.asAbsolutePath(name);
 			if(File.exists(path).not, {
-				("Quarks-install: path does not exist" + path).error;
-				^nil
+				("Path does not exist" + path).warn;
 			});
-			quark = Quark.fromLocalPath(path);
-			this.installQuark(quark);
-			^quark
+			this.link(path);
 		});
 	}
 	*uninstall { |name|
@@ -44,17 +36,13 @@ Quarks {
 		this.installed.do({ |quark|
 			LanguageConfig.removeIncludePath(quark.localPath);
 		});
-		LanguageConfig.store(LanguageConfig.currentPath);
-		this.clearCache;
-	}
-	*clearCache {
+		LanguageConfig.store();
 		cache = Dictionary.new;
-		installedPaths = nil;
 	}
-	*load { |path, done|
+	*load { |path|
 		// install a list of quarks from a text file
 		var file, line, dir,re, nameRe;
-		var match, localPath, url, name, refspec, q;
+		var match, localPath, url, name, refspec;
 		// localPath=url[@refspec]
 		re = "^([^=]+)=?([^@]+)@?(.*)$";
 		// quarkname[@refspec]
@@ -62,50 +50,43 @@ Quarks {
 		path = this.asAbsolutePath(path);
 		dir = path.dirname;
 		if(File.exists(path).not, {
-			^("Quark set file does not exist:" + path).error;
+			^("Path does not exist" + path).error;
 		});
 		this.clear();
-		Routine.run({
-			file = File.open(path, "r");
-			while({
-				line = file.getLine();
-				line.notNil
+		file = File.open(path, "r");
+		while({
+			line = file.getLine();
+			line.notNil
+		}, {
+			// resolve any paths relative to the quark file
+			match = line.findRegexp(re);
+			if(match.size > 0, {
+				localPath = match[1][1];
+				name = localPath.basename;
+				url = match[2][1];
+				refspec = match[3];
+				if(refspec.notNil, {
+					refspec = refspec[1];
+				});
+				this.install(this.asAbsolutePath(localPath, dir), refspec);
 			}, {
-				0.05.wait;
-				// resolve any paths relative to the quark file
-				match = line.findRegexp(re);
+				match = line.findRegexp(nameRe);
 				if(match.size > 0, {
-					localPath = match[1][1];
-					name = localPath.basename;
-					localPath = this.asAbsolutePath(localPath, dir);
-					url = match[2][1];
-					refspec = match[3];
+					name = match[1][1];
+					refspec = match[2];
 					if(refspec.notNil, {
 						refspec = refspec[1];
 					});
-					q = Quark(name, refspec, url, localPath);
-					q.install();
-				}, {
-					match = line.findRegexp(nameRe);
-					if(match.size > 0, {
-						name = match[1][1];
-						refspec = match[2];
-						if(refspec.notNil, {
-							refspec = refspec[1];
-						});
-						if(Quarks.isPath(name), {
-							this.install(this.asAbsolutePath(name, dir), refspec);
-						}, {
-							this.install(name, refspec);
-						});
+					if(Quarks.isPath(name), {
+						this.install(this.asAbsolutePath(name, dir), refspec);
 					}, {
-						"Unreadable line: %".format(line).error;
+						this.install(name, refspec);
 					});
+				}, {
+					"Unreadable line: %".format(line).error;
 				});
 			});
-			cache = Dictionary.new;
-			done.value();
-		}, clock: AppClock);
+		});
 	}
 	*save { |path|
 		// save currently installed quarks to a text file
@@ -145,20 +126,16 @@ Quarks {
 		^LanguageConfig.includePaths
 			.collect(Quark.fromLocalPath(_))
 	}
-	*installedPaths {
-		^installedPaths ?? {
-			installedPaths = LanguageConfig.includePaths.collect({ |apath|
-				apath.withoutTrailingSlash
-			});
-		}
-	}
 	*isInstalled { |name|
-		^this.installedPaths.any({ |path|
-			path.endsWith(name)
+		^LanguageConfig.includePaths.any({ |path|
+			path.withoutTrailingSlash.endsWith(name)
 		})
 	}
-	*pathIsInstalled { |path|
-		^this.installedPaths.includesEqual(path.withoutTrailingSlash)
+	*pathIsInstalled{ |path|
+		path = path.withoutTrailingSlash;
+		^LanguageConfig.includePaths.any({ |apath|
+			apath.withoutTrailingSlash == path
+		})
 	}
 	*openFolder {
 		this.folder.openOS;
@@ -183,20 +160,20 @@ Quarks {
 			("A version of % is already installed at %".format(quark, prev.localPath)).error;
 			^false
 		});
-
-		"Installing %".format(quark.name).inform;
-
 		quark.checkout();
 		if(quark.isCompatible().not, {
 			^incompatible.value(quark.name);
 		});
-		quark.dependencies.do { |dep|
-			var ok = dep.install();
-			if(ok.not, {
-				("Failed to install" + quark.name).error;
-				^false
+		deps = quark.deepDependencies;
+		deps.do({ |dep|
+			if(dep.isCompatible().not, {
+				^incompatible.value(dep.name);
 			});
-		};
+			dep.checkout();
+		});
+		deps.do({ |dep|
+			this.link(dep.localPath);
+		});
 		this.link(quark.localPath);
 		(quark.name + "installed").inform;
 		^true
@@ -207,8 +184,7 @@ Quarks {
 		if(LanguageConfig.includePaths.includesEqual(path).not, {
 			path.debug("Adding path");
 			LanguageConfig.addIncludePath(path);
-			LanguageConfig.store(LanguageConfig.currentPath);
-			installedPaths = installedPaths.add(path.withoutTrailingSlash);
+			LanguageConfig.store();
 			^true
 		});
 		^false
@@ -218,8 +194,7 @@ Quarks {
 		if(LanguageConfig.includePaths.includesEqual(path), {
 			path.debug("Removing path");
 			LanguageConfig.removeIncludePath(path);
-			LanguageConfig.store(LanguageConfig.currentPath);
-			installedPaths.remove(path.withoutTrailingSlash);
+			LanguageConfig.store();
 			^true
 		});
 		^false
@@ -231,18 +206,7 @@ Quarks {
 		if(File.exists(folder).not, {
 			folder.mkdir();
 		});
-		this.clearCache;
-		if(thisProcess.platform.name !== 'windows', {
-			regex = (
-				isPath: "^[~\\.]?/",
-				isAbsolutePath: "^/"
-			);
-		}, {
-			regex = (
-				isPath: "\\\\|/",
-				isAbsolutePath: "^[A-Za-z]:\\\\"
-			);
-		});
+		cache = Dictionary.new;
 	}
 	*at { |name|
 		var q;
@@ -280,13 +244,9 @@ Quarks {
 
 		f = { |path|
 			// \directory or \not_found, but not a file
-			var downloadedQuarks = "downloaded-quarks" +/+ "quarks";
 			if(File.type(path) !== \regular, {
 				path = path.withoutTrailingSlash;
-				// ignore the directory
-				if(path.endsWith(downloadedQuarks).not, {
-					all[path] = Quark.fromLocalPath(path);
-				});
+				all[path] = Quark.fromLocalPath(path);
 			});
 		};
 		(Quarks.folder +/+ "*").pathMatch.do(f);
@@ -297,76 +257,53 @@ Quarks {
 		^all.values
 	}
 	*fetchDirectory { |force=true|
-		// will only pull every 15 minutes unless force is true
-		var dirTxtPath = Quarks.folder +/+ "quarks" +/+ "directory.txt",
+		// TODO: needs a cross platform download
+		var dirCachePath = Quarks.folder +/+ "directory.txt",
 			fetch = true;
-
-		if(File.exists(dirTxtPath), {
-			fetch = force // or: fetched.not
-		});
-		{
-			if(fetch, { this.prFetchDirectory });
-			this.prReadDirectoryFile(dirTxtPath);
-		}.try({ arg err;
-			("Failed to read quarks directory listing: % %".format(if(fetch, directoryUrl, dirTxtPath), err)).error;
-			if(fetch, {
-				// if fetch failed, try read from cache
-				 if(File.exists(dirTxtPath), {
-					this.prReadDirectoryFile(dirTxtPath);
-				});
-			}, {
-				// if read from cache failed, try fetching
-				if(fetch, { this.prFetchDirectory });
-				this.prReadDirectoryFile(dirTxtPath);
-			});
-		});
-	}
-	*checkForUpdates { |done|
-		Routine.run({
-			this.all.do { arg quark;
-				if(quark.isGit, {
-					quark.checkForUpdates();
-				});
-				0.05.wait;
+		// what if you are offline ?
+		if(File.exists(dirCachePath), {
+			fetch = force or: {
+				(Date.getDate().rawSeconds) - File.mtime(dirCachePath) > (60 * 60 * 4)
 			};
-			done.value();
 		});
-	}
-	*prReadDirectoryFile { |dirTxtPath|
-		var file;
-		directory = Dictionary.new;
-		file = File.open(dirTxtPath, "r");
 		{
-			var line, kv;
-			while({
-				line = file.getLine();
-				line.notNil;
+			this.prReadFile(fetch, dirCachePath);
+		}.try({ arg err;
+			("Failed to fetch quarks directory listing: % %".format(if(fetch, directoryUrl, dirCachePath), err)).error;
+			// if fetch failed, try read from cache
+			// if read from cache failed, try fetching
+			if(fetch, {
+				 if(File.exists(dirCachePath), {
+					this.prReadFile(false, dirCachePath);
+				});
 			}, {
-				kv = line.split($=);
-				directory[kv[0]] = kv[1];
+				this.prReadFile(true, dirCachePath);
 			});
-		}.protect({
-			file.close;
 		});
 	}
-	*prFetchDirectory {
-		// clone or pull
-		// unless existing non-git copy exists
-		var git, localPath;
-		if(fetched, { ^this });
-		("Fetching" + directoryUrl).debug;
-		localPath = Quarks.folder +/+ "quarks";
-		git = Git(localPath);
-		if(Git.isGit(localPath), {
-			git.pull
+	*prReadFile { |fetch, dirCachePath|
+		var line, kv, file, cached=List.new;
+		directory = Dictionary.new;
+		if(fetch, {
+			("Fetching" + directoryUrl).debug;
+			file = Pipe("curl" + Quarks.directoryUrl, "r");
 		}, {
-			// check for manually downloaded copy
-			// that exists but is not a git repo
-			if(File.exists(localPath +/+ "directory.txt").not, {
-				git.clone(directoryUrl)
-			})
+			("Reading" + dirCachePath).debug;
+			file = File.open(dirCachePath, "r");
 		});
-		fetched = true;
+		while({
+			line = file.getLine();
+			line.notNil;
+		}, {
+			kv = line.split($=);
+			directory[kv[0]] = kv[1];
+			cached.add(line);
+		});
+		file.close;
+		if(fetch and: {cached.size > 0}, {
+			dirCachePath.debug("writing");
+			File.open(dirCachePath, "w").put(cached.join(Char.nl)).close();
+		});
 	}
 	*quarkNameAsLocalPath { |name|
 		^if(this.isPath(name), {
@@ -376,17 +313,17 @@ Quarks {
 		});
 	}
 	*isPath { |string|
-		^string.findRegexp(regex.isPath).size != 0
+		^string.findRegexp("^[~\.]?/").size != 0
 	}
 	*asAbsolutePath { |path, relativeTo|
-		^if(path.findRegexp(regex.isAbsolutePath).size != 0, {
+		^if(path.at(0).isPathSeparator, {
 			path
 		}, {
 			if(path.at(0) == $~, {
 				^path.standardizePath
 			});
 			// scroot is the cwd at startup
-			if(path.beginsWith("." ++ Platform.pathSeparator), {
+			if(path.beginsWith("./"), {
 				^(relativeTo ?? {PathName.scroot}) +/+ path.copyToEnd(2)
 			});
 			(relativeTo ?? {PathName.scroot}) +/+ path

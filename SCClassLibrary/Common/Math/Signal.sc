@@ -3,8 +3,8 @@ Signal[float] : FloatArray {
 	*sineFill { arg size, amplitudes, phases;
 		^Signal.newClear(size).sineFill(amplitudes, phases).normalize
 	}
-	*chebyFill { arg size, amplitudes, normalize=true, zeroOffset=false;
-		^Signal.newClear(size).chebyFill(amplitudes, normalize, zeroOffset);
+	*chebyFill { arg size, amplitudes, normalize=true;
+		^Signal.newClear(size).chebyFill(amplitudes, normalize); //.normalizeTransfer //shouldn't normalize by default!
 	}
 	*hammingWindow { arg size, pad=0;
 		if (pad == 0, {
@@ -167,23 +167,11 @@ Signal[float] : FloatArray {
 		_SignalAddChebyshev
 		^this.primitiveFailed
 	}
-	chebyFill { arg amplitudes, normalize=true, zeroOffset=false;
+	chebyFill { arg amplitudes, normalize=true;
 		this.fill(0.0);
-		amplitudes.do({ arg amp, i;
-			this.addChebyshev(i+1, amp);
-			if (zeroOffset) {
-				if(i%4==1,{this.offset(amp)});
-				if(i%4==3,{this.offset(-1*amp)});
-			} //corrections for JMC DC offsets, as per Buffer:cheby
-		});
+		amplitudes.do({ arg amp, i; this.addChebyshev(i+1, amp); if(i%4==1,{this.offset(1)}); if(i%4==3,{this.offset(-1)}); }); //corrections for JMC DC offsets, as per Buffer:cheby
 
-		if (normalize) {
-			if (zeroOffset) {
-				this.normalizeTransfer
-			} {
-				this.normalize
-			}
-		};
+		if(normalize,{this.normalizeTransfer}); //no automatic cheby
 	}
 
 	//old version
@@ -321,9 +309,9 @@ Wavetable[float] : FloatArray {
 	}
 
 	//size must be N/2+1 for N power of two; N is eventual size of wavetable
-	*chebyFill { arg size, amplitudes, normalize=true, zeroOffset=false;
+	*chebyFill { arg size, amplitudes, normalize=true;
 
-		^Signal.chebyFill(size, amplitudes, normalize, zeroOffset).asWavetableNoWrap; //asWavetable causes wrap here, problem
+		^Signal.chebyFill(size, amplitudes, normalize).asWavetableNoWrap; //asWavetable causes wrap here, problem
 	}
 
 	*chebyFill_old { arg size, amplitudes;

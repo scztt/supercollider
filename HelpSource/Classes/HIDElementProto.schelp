@@ -1,6 +1,6 @@
 TITLE:: HIDElementProto
 summary:: Prototype HID element to match with HIDFunc
-categories:: External Control>HID
+categories:: External control>HID
 related:: Classes/HIDFunc, Classes/HIDdef, Classes/HIDProto, Classes/HID, Classes/HIDElement, Classes/HIDInfo, Guides/Working_with_HID
 
 DESCRIPTION::

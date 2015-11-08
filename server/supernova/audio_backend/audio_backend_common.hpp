@@ -1,5 +1,5 @@
 //  audio backend helpers
-//  Copyright (C) 2010-2015 Tim Blechmann
+//  Copyright (C) 2010 Tim Blechmann
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -143,12 +143,12 @@ protected:
 class audio_settings_basic
 {
 protected:
-    float samplerate_ = 0.f;
-    uint16_t input_channels = 0;
-    uint16_t output_channels = 0;
+    float samplerate_;
+    uint16_t input_channels, output_channels;
 
 public:
-    audio_settings_basic(void)
+    audio_settings_basic(void):
+        samplerate_(0.f), input_channels(0), output_channels(0)
     {}
 
     float get_samplerate(void) const

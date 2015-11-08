@@ -84,8 +84,7 @@ struct Method {
         SignatureWithArgumentsAndDefaultValues
     };
 
-    QString   signature( SignatureStyle style ) const;
-    bool      matches(const QString& toMatch) const;
+    QString signature( SignatureStyle style ) const;
 
     Class *ownerClass;
     FlyweightString name;

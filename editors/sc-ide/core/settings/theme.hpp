@@ -52,7 +52,6 @@ public:
 private:
     void fillUser(const QString & theme, const Manager *settings);
     void fillDefault();
-    void fillDark();
 
     bool mLocked;
     QMap<QString, QTextCharFormat *> mFormats;

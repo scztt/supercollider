@@ -91,7 +91,8 @@ Bag : Collection {
 	asBag { ^this }
 }
 
-IdentityBag : Bag {
+IdentityBag : Bag
+{
 	// PRIVATE IMPLEMENTATION
 	setDictionary { arg n;
 		contents = IdentityDictionary.new(n)

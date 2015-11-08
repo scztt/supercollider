@@ -20,7 +20,7 @@
 
 
 #include "SC_WorldOptions.h"
-#include "SC_Version.hpp"
+
 #include <cstring>
 #include <stdio.h>
 #include <stdarg.h>
@@ -51,7 +51,6 @@ void Usage()
 {
 	scprintf(
 		"supercollider_synth  options:\n"
-		"   -v print the supercollider version and exit\n"
 		"   -u <udp-port-number>    a port number 0-65535\n"
 		"   -t <tcp-port-number>    a port number 0-65535\n"
 		"   -c <number-of-control-bus-channels> (default %d)\n"
@@ -85,7 +84,7 @@ void Usage()
 		"   -L enable memory locking\n"
 #endif
 		"   -H <hardware-device-name>\n"
-		"   -V <verbosity>\n"
+		"   -v <verbosity>\n"
 		"          0 is normal behaviour\n"
 		"          -1 suppresses informational messages\n"
 		"          -2 suppresses informational and many error messages\n"
@@ -145,7 +144,7 @@ int main(int argc, char* argv[])
 	WorldOptions options = kDefaultWorldOptions;
 
 	for (int i=1; i<argc;) {
-		if (argv[i][0] != '-' || argv[i][1] == 0 || strchr("utaioczblndpmwZrCNSDIOMHvVRUhPL", argv[i][1]) == 0) {
+		if (argv[i][0] != '-' || argv[i][1] == 0 || strchr("utaioczblndpmwZrNSDIOMHvRUhPL", argv[i][1]) == 0) {
 			scprintf("ERROR: Invalid option %s\n", argv[i]);
 			Usage();
 		}
@@ -275,13 +274,9 @@ int main(int argc, char* argv[])
 				options.mMemoryLocking = false;
 #endif
 				break;
-			case 'V' :
+			case 'v' :
 				checkNumArgs(2);
 				options.mVerbosity = atoi(argv[j+1]);
-				break;
-			case 'v' :
-				scprintf("scsynth %s\n", SC_VersionString().c_str());
-				exit(0);
 				break;
 			case 'R' :
 				checkNumArgs(2);
@@ -295,9 +290,6 @@ int main(int argc, char* argv[])
 				checkNumArgs(2);
 				options.mRestrictedPath = argv[j+1];
 				break;
-            case 'C' :
-				checkNumArgs(2);
-                break;
 			case 'h':
 			default: Usage();
 		}
@@ -340,13 +332,13 @@ int main(int argc, char* argv[])
 
 	if (udpPortNum >= 0) {
 		if (!World_OpenUDP(world, udpPortNum)) {
-			World_Cleanup(world,true);
+			World_Cleanup(world);
 			return 1;
 		}
 	}
 	if (tcpPortNum >= 0) {
 		if (!World_OpenTCP(world, tcpPortNum, options.mMaxLogins, 8)) {
-			World_Cleanup(world,true);
+			World_Cleanup(world);
 			return 1;
 		}
 	}
@@ -360,7 +352,7 @@ int main(int argc, char* argv[])
 	}
 	fflush(stdout);
 
-	World_WaitForQuit(world,true);
+	World_WaitForQuit(world);
 
 
 #ifdef _WIN32

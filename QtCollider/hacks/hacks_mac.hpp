@@ -30,7 +30,6 @@ namespace Mac {
 bool IsCmdPeriodKeyUp(void * event);
 bool IsCmdPeriodKeyDown(void * event);
 bool isKeyWindow ( QWidget *w );
-bool AlwaysShowScrollbars();
 void activateApp ();
     
 } // namespace Mac

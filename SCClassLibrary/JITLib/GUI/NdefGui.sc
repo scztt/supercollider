@@ -196,23 +196,23 @@ NdefGui : JITGui {
 	}
 
 	makeNameView { |nameWid, height|
+		try { // QT temp fix
 			nameView = DragBoth(zone, Rect(0,0, nameWid, height))
 			.font_(font).align_(\center)
-			.background_(skin.background)
-			.stringColor_(skin.fontColor);
-
-			nameView.receiveDragHandler_({
+			.receiveDragHandler_({
 				var drag = View.currentDrag;
 				if (drag.isKindOf(String)) { drag = drag.interpret };
 				this.object_(drag);
 			});
+		} {
+			nameView = TextView(zone, Rect(0,0, nameWid, height))
+		    .font_(font)
+		}
 	}
 
 	makeTypeView { |width, height|
 		typeView = StaticText(zone, width@height).string_("-").align_(0)
-		.background_(skin.background)
-		.stringColor_(skin.fontColor)
-		.font_(font).align_(\center);
+			.font_(font).align_(\center);
 	}
 
 	makeClrBut { |width, height|
@@ -282,14 +282,8 @@ NdefGui : JITGui {
 				numberWidth: width - 28
 		);
 
-		fadeBox.labelView.font_(font)
-			.background_(skin.background)
-			.stringColor_(skin.fontColor);
-
-		fadeBox.numberView.font_(font)
-			.background_(skin.background)
-			.stringColor_(skin.fontColor)
-		.refresh;
+		fadeBox.labelView.font_(font).background_(skin.offColor);
+		fadeBox.numberView.font_(font).background_(skin.offColor);
 	}
 
 	makeMonitor { |width, height, npOptions|
@@ -359,7 +353,7 @@ NdefGui : JITGui {
 			\name, object.key,
 			\type, object.typeStr,
 			\isPaused, object.paused,
-			\canSend, object.sources.size > 0,
+			\canSend, object.sources.notNil,
 			\fadeTime, object.fadeTime,
 			\isPlaying, object.isPlaying
 		]);
@@ -403,7 +397,7 @@ NdefGui : JITGui {
 
 		if (sendBut.notNil) {
 			if (newState[\canSend] != prevState[\canSend]) {
-				sendBut.value_(newState[\canSend].binaryValue);
+				sendBut.value_(newState[\canSend].binaryValue)
 			}
 		};
 		if (wakeBut.notNil) {

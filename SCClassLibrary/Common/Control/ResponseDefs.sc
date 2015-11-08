@@ -129,7 +129,7 @@ AbstractWrappingDispatcher :  AbstractDispatcher {
 		func = this.wrapFunc(funcProxy);
 		wrappedFuncs[funcProxy] = func;
 		keys = this.getKeysForFuncProxy(funcProxy);
-		keys.do({|key| active[key] = active[key].addFunc(func) }); // support multiple keys
+		keys.do({|key| active[key] = active[key].copy.addFunc(func) }); // support multiple keys
 		if(registered.not, {this.register});
 	}
 
@@ -138,7 +138,7 @@ AbstractWrappingDispatcher :  AbstractDispatcher {
 		funcProxy.removeDependant(this);
 		keys = this.getKeysForFuncProxy(funcProxy);
 		func = wrappedFuncs[funcProxy];
-		keys.do({|key| active[key] = active[key].removeFunc(func) }); // support multiple keys
+		keys.do({|key| active[key] = active[key].copy.removeFunc(func) }); // support multiple keys
 		wrappedFuncs[funcProxy] = nil;
 		if(active.size == 0, {this.unregister});
 	}
@@ -150,7 +150,7 @@ AbstractWrappingDispatcher :  AbstractDispatcher {
 		oldFunc = wrappedFuncs[funcProxy];
 		wrappedFuncs[funcProxy] = func;
 		keys = this.getKeysForFuncProxy(funcProxy);
-		keys.do({|key| active[key] = active[key].replaceFunc(oldFunc, func) }); // support multiple keys
+		keys.do({|key| active[key] = active[key].copy.replaceFunc(oldFunc, func) }); // support multiple keys
 	}
 
 	wrapFunc { this.subclassResponsibility(thisMethod) }
@@ -491,11 +491,7 @@ MIDISysDataDispatcher : MIDIMessageDispatcher {
 	register {
 		var hook;
 		// select the correct low-level hook.
-		hook = switch(messageType,
-			\sysex, {\sysex},
-			\mtcQF, {\smpte},
-			{\sysrt}
-		);
+		hook = if(messageType == \sysex || messageType == \mtcQF, {messageType}, {\sysrt});
 		MIDIIn.perform(hook.asSetter, MIDIIn.perform(hook.asGetter).addFunc(this));
 		registered = true;
 	}
@@ -503,11 +499,7 @@ MIDISysDataDispatcher : MIDIMessageDispatcher {
 	unregister {
 		var hook;
 		// select the correct low-level hook.
-		hook = switch(messageType,
-			\sysex, {\sysex},
-			\mtcQF, {\smpte},
-			{\sysrt}
-		);
+		hook = if(messageType == \sysex || messageType == \mtcQF, {messageType}, {\sysrt});
 		MIDIIn.perform(hook.asSetter, MIDIIn.perform(hook.asGetter).removeFunc(this));
 		registered = false;
 	}
@@ -531,18 +523,10 @@ MIDISysDataDispatcher : MIDIMessageDispatcher {
 	}
 }
 
-MIDISysDataDropIndDispatcher : MIDISysDataDispatcher {
-	
-	value {|srcID, index, data|
-		active[index].value(data, srcID);
-	}
-
-}
-
 MIDISysNoDataDispatcher : MIDISysDataDispatcher {
 
 	value {|srcID, index|
-		active[index].value(srcID);
+		active[index].value(srcID, index);
 	}
 
 	wrapFunc {|funcProxy|
@@ -649,7 +633,7 @@ MIDIFunc : AbstractResponderFunc {
 			};*/ // unneeded? Just trace raw MTC
 		});
 		[\songPosition, \songSelect].do({|type|
-			defaultDispatchers[type] = MIDISysDataDropIndDispatcher(type);
+			defaultDispatchers[type] = MIDISysDataDispatcher(type);
 			traceFuncs[type] = {|src, ind, data|
 				if(ind == sysIndices[type], {
 					"MIDI Message Received:\n\ttype: %\n\tsrc: %\n\tdata: %\n\n".postf(type, src, data);
@@ -658,9 +642,9 @@ MIDIFunc : AbstractResponderFunc {
 		});
 		[\sysrt].do({|type|
 			defaultDispatchers[type] = MIDISysDataDispatcher(type);
-			traceFuncs[type] = {|src, ind, data|
+/*			traceFuncs[type] = {|src, ind, data|
 				"MIDI Message Received:\n\ttype: %\n\tindex: %\n\tsrc: %\n\tdata: %\n\n".postf(type, ind, src, data);
-			};// maybe unneeded
+			};*/// maybe unneeded
 		});
 		[\tuneRequest, \midiClock, \tick, \start, \continue, \stop, \activeSense, \reset].do({|type|
 			defaultDispatchers[type] = MIDISysNoDataDispatcher(type);
@@ -684,11 +668,8 @@ MIDIFunc : AbstractResponderFunc {
 				[\noteOn, \noteOff, \control, \polytouch, \touch, \program, \bend, \sysex].do({|type|
 					MIDIIn.addFuncTo(type, traceFuncs[type]);
 				});
-				[\tuneRequest, \midiClock, \tick, \start, \continue, \stop, \activeSense, \reset, \songPosition, \songSelect].do({|type|
+				[\tuneRequest, \midiClock, \tick, \start, \continue, \stop, \activeSense, \reset].do({|type|
 					MIDIIn.addFuncTo(\sysrt, traceFuncs[type]);
-				});
-				[\mtcQF].do({|type|
-					MIDIIn.addFuncTo(\smpte, traceFuncs[type]);
 				});
 				CmdPeriod.add(this);
 				traceRunning = true;
@@ -697,11 +678,8 @@ MIDIFunc : AbstractResponderFunc {
 			[\noteOn, \noteOff, \control, \polytouch, \touch, \program, \bend, \sysex].do({|type|
 				MIDIIn.removeFuncFrom(type, traceFuncs[type]);
 			});
-			[\tuneRequest, \midiClock, \tick, \start, \continue, \stop, \activeSense, \reset, \songPosition, \songSelect].do({|type|
+			[\tuneRequest, \midiClock, \tick, \start, \continue, \stop, \activeSense, \reset].do({|type|
 				MIDIIn.removeFuncFrom(\sysrt, traceFuncs[type]);
-			});
-			[\mtcQF].do({|type|
-				MIDIIn.removeFuncFrom(\smpte, traceFuncs[type]);
 			});
 			CmdPeriod.remove(this);
 			traceRunning = false;
@@ -809,8 +787,6 @@ MIDIFunc : AbstractResponderFunc {
 
 	init {|argfunc, argmsgNum, argchan, argType, argsrcID, argtempl, argdisp|
 		msgNum = argmsgNum ? msgNum;
-		msgNum = msgNum.isNumber.if({ msgNum.asInteger }, msgNum);
-		msgNum = msgNum.isCollection.if({ msgNum.collect(_.asInteger) }, msgNum);
 		chan = argchan ? chan;
 		srcID = argsrcID ? srcID;
 		func = argfunc ? func;

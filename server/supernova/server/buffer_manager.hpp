@@ -39,7 +39,7 @@ struct buffer_wrapper
     typedef uint32_t uint;
 
     buffer_wrapper(void):
-        data(nullptr), frames_(0), channels_(0), sample_rate_(0)
+        data(0), frames_(0), channels_(0), sample_rate_(0)
     {}
 
     ~buffer_wrapper(void)
@@ -54,7 +54,7 @@ struct buffer_wrapper
     {
         if (data) {
             free_aligned(data);
-            data = nullptr;
+            data = 0;
             frames_ = 0;
             channels_ = 0;
         }
@@ -140,13 +140,13 @@ public:
 
     void check_buffer_unused(int index)
     {
-        if (buffers[index].data != nullptr)
+        if (buffers[index].data != NULL)
             throw std::runtime_error("buffer already in use");
     }
 
     void check_buffer_in_use(int index)
     {
-        if (buffers[index].data == nullptr)
+        if (buffers[index].data == NULL)
             throw std::runtime_error("buffer is not in use");
     }
 

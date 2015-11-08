@@ -43,10 +43,8 @@ NetAddr {
 	}
 
 	*disconnectAll {
-		if(connections.notNil, {
-			connections.keys.do({ |netAddr|
-				netAddr.disconnect;
-			});
+		connections.keys.do({ | netAddr |
+			netAddr.disconnect;
 		});
 	}
 
@@ -94,7 +92,7 @@ NetAddr {
 		} {
 			// not sure what the exact size is, but its about 20000
 			// this relates to what _NetAddr_SendBundle can send
-			if(bundles.bundleSize > 20000/*65515*/) { // 65515 = 65535 - 16 - 4 (sync msg size)
+ 			if(bundles.bundleSize > 20000/*65515*/) { // 65515 = 65535 - 16 - 4 (sync msg size)
 				bundles.clumpBundles.do { |item|
 					id = this.makeSyncResponder(condition);
 					this.sendBundle(latency, *(item ++ [["/sync", id]]));

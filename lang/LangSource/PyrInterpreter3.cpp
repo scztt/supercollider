@@ -61,7 +61,7 @@ double timeNow();
 
 int32 timeseed()
 {
-	using namespace std::chrono;
+	using namespace chrono;
 
 	high_resolution_clock::time_point now = high_resolution_clock::now();
 	high_resolution_clock::duration since_epoch = now.time_since_epoch();
@@ -151,7 +151,7 @@ void runAwakeMessage(VMGlobals *g)
 }
 
 void initPyrThread(VMGlobals *g, PyrThread *thread, PyrSlot *func, int stacksize, PyrInt32Array* rgenArray,
-	double beats, double seconds, PyrSlot* clock, bool runGC);
+	double beats, double seconds, PyrSlot* clock, bool collect);
 int32 timeseed();
 
 PyrProcess* newPyrProcess(VMGlobals *g, PyrClass *procclassobj)
@@ -296,7 +296,7 @@ void initPatterns();
 void initThreads();
 void initGUI();
 
-#ifndef _WIN32
+#ifndef SC_WIN32
 bool running = true;
 static void handleSigUsr1(int param)
 {
@@ -348,7 +348,7 @@ bool initRuntime(VMGlobals *g, int poolSize, AllocPool *inPool)
 #endif
 	//tellPlugInsAboutToRun();
 
-#ifndef _WIN32
+#ifndef SC_WIN32
 	signal(SIGUSR1,handleSigUsr1);
 #endif
 
@@ -851,7 +851,7 @@ HOT void Interpret(VMGlobals *g)
 	if (setjmp(g->escapeInterpreter) != 0) {
 		return;
 	}
-#ifndef _WIN32
+#ifndef SC_WIN32
 	while (running) {  // not going to indent body to save line space
 #else
 	while (true) {
@@ -2684,7 +2684,7 @@ HOT void Interpret(VMGlobals *g)
 			dispatch_opcode;
 	} // switch(op1)
 	} // end while(running)
-#ifndef _WIN32
+#ifndef SC_WIN32
 	running = true; // reset the signal
 #endif
 	g->sp = sp; g->ip = ip;

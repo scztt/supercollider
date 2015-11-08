@@ -1,4 +1,5 @@
-Platform {
+Platform
+{
 	classvar defaultStartupFile;
 
 	// IDE actions
@@ -128,6 +129,7 @@ Platform {
 
 	// Prefer qt but fall back to swing if qt not installed.
 	defaultGUIScheme { if (GUI.get(\qt).notNil) {^\qt} {^\swing} }
+	defaultHIDScheme { ^\none }
 
 	isSleeping { ^false } // unless defined otherwise
 
@@ -148,7 +150,8 @@ Platform {
 	}
 }
 
-UnixPlatform : Platform {
+UnixPlatform : Platform
+{
 	pathSeparator { ^$/ }
 
 	isPathSeparator { |char|

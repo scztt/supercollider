@@ -297,11 +297,6 @@ int ScIDE_Send(struct VMGlobals *g, int numArgsPushed)
         return errFailed;
     }
 
-    if( !gMainVMGlobals->canCallOS ) {
-        error("You can not use ScIDE:prSend functionality in the current thread.\nTry scheduling on AppClock instead.\n");
-        return errFailed;
-    }
-
     PyrSlot * idSlot = g->sp - 1;
     char id[255];
     if (slotStrVal( idSlot, id, 255 ))

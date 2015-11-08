@@ -8,7 +8,8 @@
 //
 // A special syntax shortcut for Ref.new( expr ) is to use a backquote: `expr
 
-Ref : AbstractFunction {
+Ref : AbstractFunction
+{
 	var <>value;
 	*new { arg thing; ^super.new.value_(thing) }
 	set { arg thing; value = thing }
@@ -55,6 +56,7 @@ Ref : AbstractFunction {
 	}
 }
 
-RefCopy : Ref {
+RefCopy : Ref
+{
 	next { ^value.copy }
 }

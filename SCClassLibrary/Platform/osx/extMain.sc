@@ -1,4 +1,5 @@
-+ Main {
++ Main
+{
 	platformClass { ^OSXPlatform }
 
 	applicationStart {

@@ -39,24 +39,23 @@
 namespace nova
 {
 
-class nova_server * instance = nullptr;
+class nova_server * instance = 0;
 
 nova_server::nova_server(server_arguments const & args):
     server_shared_memory_creator(args.port(), args.control_busses),
     scheduler<thread_init_functor>(args.threads, !args.non_rt),
-    buffer_manager(args.buffers), sc_osc_handler(args)
+    buffer_manager(args.buffers), sc_osc_handler(args), dsp_queue_dirty(false),
+    quit_requested_(false)
 {
     assert(instance == 0);
     instance = this;
-    
-    use_system_clock = (args.use_system_clock == 1);
-    smooth_samplerate = args.samplerate;
-    
+
     if (!args.non_rt)
         io_interpreter.start_thread();
 
     sc_factory = new sc_ugen_factory;
     sc_factory->initialize(args, server_shared_memory_creator::shm->get_control_busses());
+
 
     /** first guess: needs to be updated, once the backend is started */
     time_per_tick = time_tag::from_samples(args.blocksize, args.samplerate);
@@ -88,8 +87,6 @@ void nova_server::prepare_backend(void)
 
 nova_server::~nova_server(void)
 {
-    //we should delete but get chrashes at the moment on linux and macosx
-    //delete sc_factory;
 #if defined(JACK_BACKEND) || defined(PORTAUDIO_BACKEND)
     deactivate_audio();
 #endif
@@ -98,7 +95,7 @@ nova_server::~nova_server(void)
 
     scheduler<thread_init_functor>::terminate();
     io_interpreter.join_thread();
-    instance = nullptr;
+    instance = 0;
 }
 
 void nova_server::perform_node_add(server_node *node, node_position_constraint const & constraints, bool update_dsp_queue)
@@ -116,8 +113,8 @@ void nova_server::perform_node_add(server_node *node, node_position_constraint c
 abstract_synth * nova_server::add_synth(const char * name, int id, node_position_constraint const & constraints)
 {
     abstract_synth * ret = synth_factory::create_instance(name, id);
-    if (ret == nullptr)
-        return nullptr;
+    if (ret == 0)
+        return 0;
 
     perform_node_add(ret, constraints, true);
     return ret;
@@ -126,8 +123,8 @@ abstract_synth * nova_server::add_synth(const char * name, int id, node_position
 group * nova_server::add_group(int id, node_position_constraint const & constraints)
 {
     group * g = new group(id);
-    if (g == nullptr)
-        return nullptr;
+    if (g == 0)
+        return 0;
 
     perform_node_add(g, constraints, false);
     return g;
@@ -136,8 +133,8 @@ group * nova_server::add_group(int id, node_position_constraint const & constrai
 parallel_group * nova_server::add_parallel_group(int id, node_position_constraint const & constraints)
 {
     parallel_group * g = new parallel_group(id);
-    if (g == nullptr)
-        return nullptr;
+    if (g == 0)
+        return 0;
 
     perform_node_add(g, constraints, false);
     return g;
@@ -170,7 +167,7 @@ void nova_server::finalize_node(server_node & node)
 
 void nova_server::free_node(server_node * node)
 {
-    if (node->get_parent() == nullptr)
+    if (node->get_parent() == NULL)
         return; // has already been freed by a different event
 
     node_graph::remove_node(node, [&] (server_node & node) {
@@ -339,14 +336,6 @@ void realtime_engine_functor::init_thread(void)
 #ifdef JACK_BACKEND
     set_realtime_priority(0);
 #endif
-    if(instance->use_system_clock){
-        double nows = (uint64)(OSCTime(std::chrono::system_clock::now())) * kOSCtoSecs;
-        instance->mDLL.Reset(
-            sc_factory->world.mSampleRate,
-            sc_factory->world.mBufLength,
-            SC_TIME_DLL_BW,
-            nows);
-    }
 
     name_current_thread(0);
 }

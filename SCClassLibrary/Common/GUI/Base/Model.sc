@@ -26,11 +26,6 @@ SimpleController {
 	remove {
 		model.removeDependant(this);
 	}
-	removeAt{ |what|
-		if (actions.notNil) {
-			actions.removeAt(what)
-		}
-	}
 }
 
 TestDependant {

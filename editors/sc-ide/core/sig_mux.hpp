@@ -43,8 +43,7 @@ public:
     bool disconnect(QObject *sender, const char *signal, const char *slot);
     void connect(const char *signal, QObject *receiver, const char *slot, ConnectionMode = ConnectionNecessary);
     bool disconnect(const char *signal, QObject *receiver, const char *slot);
-    bool disconnect(QObject *sender);
-    
+
     QObject *currentObject() const { return mObject; }
 
 public slots:

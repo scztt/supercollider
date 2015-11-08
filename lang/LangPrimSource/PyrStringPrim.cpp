@@ -32,7 +32,7 @@ Primitives for String.
 #include <ctype.h>
 #include "PyrLexer.h"
 #include "SC_DirUtils.h"
-#ifdef _WIN32
+#ifdef SC_WIN32
 # include <direct.h>
 # include "SC_Win32Utils.h"
 #else
@@ -163,7 +163,6 @@ int prString_Format(struct VMGlobals *g, int numArgsPushed)
 				buf[k++] = '%';
 			} else {
 				i--;
-                buf[k++] = '\\';
 			}
 		} else {
 			buf[k++] = ch;
@@ -409,6 +408,7 @@ static int prString_FindRegexp(struct VMGlobals *g, int numArgsPushed)
 	int match_count = matches.size();
 
 	PyrObject *result_array = newPyrArray(g->gc, match_count, 0, true);
+	result_array->size = 0;
 	SetObject(a, result_array);
 
 	if( !match_count ) return errNone;
@@ -421,7 +421,7 @@ static int prString_FindRegexp(struct VMGlobals *g, int numArgsPushed)
 		PyrObject *array = newPyrArray(g->gc, 2, 0, true);
 		SetObject(result_array->slots + i, array);
 		result_array->size++;
-		g->gc->GCWriteNew(result_array, array); // we know array is white so we can use GCWriteNew
+		g->gc->GCWrite(result_array, array);
 
 		PyrString *matched_string = newPyrStringN(g->gc, len, 0, true);
 		memcpy(matched_string->s, stringBegin + pos, len);
@@ -429,7 +429,7 @@ static int prString_FindRegexp(struct VMGlobals *g, int numArgsPushed)
 		array->size = 2;
 		SetInt(array->slots, pos + offset);
 		SetObject(array->slots+1, matched_string);
-		g->gc->GCWrite(array, matched_string); // we know matched_string is white so we can use GCWriteNew
+		g->gc->GCWrite(array, matched_string);
 	};
 
 	return errNone;
@@ -490,7 +490,7 @@ static int prString_FindRegexpAt(struct VMGlobals *g, int numArgsPushed)
 	array->size = 2;
 	SetInt(array->slots+1, matched_len);
 	SetObject(array->slots, matched_string);
-	g->gc->GCWriteNew(array, matched_string); // we know matched_string is white so we can use GCWriteNew
+	g->gc->GCWrite(array, matched_string);
 
 	return errNone;
 }
@@ -540,7 +540,7 @@ int prStringHash(struct VMGlobals *g, int numArgsPushed)
 	return errNone;
 }
 
-#ifndef _WIN32
+#ifndef SC_WIN32
 #include <glob.h>
 
 int prStringPathMatch(struct VMGlobals *g, int numArgsPushed);
@@ -570,7 +570,7 @@ int prStringPathMatch(struct VMGlobals *g, int numArgsPushed)
 	for (unsigned int i=0; i<pglob.gl_pathc; ++i) {
 		PyrObject *string = (PyrObject*)newPyrString(g->gc, pglob.gl_pathv[i], 0, true);
 		SetObject(array->slots+i, string);
-		g->gc->GCWriteNew(array, string); // we know string is white so we can use GCWriteNew
+		g->gc->GCWrite(array, string);
 		array->size++;
 	}
 
@@ -578,7 +578,7 @@ int prStringPathMatch(struct VMGlobals *g, int numArgsPushed)
 
 	return errNone;
 }
-#else //#ifndef _WIN32
+#else //#ifndef SC_WIN32
 int prStringPathMatch(struct VMGlobals *g, int numArgsPushed);
 
 int prStringPathMatch(struct VMGlobals *g, int numArgsPushed)
@@ -647,7 +647,7 @@ int prStringPathMatch(struct VMGlobals *g, int numArgsPushed)
       const char* fullPath = strPath.c_str();
       PyrObject *string = (PyrObject*)newPyrString(g->gc, fullPath, 0, true);
       SetObject(array->slots+i, string);
-      g->gc->GCWriteNew(array, string); // we know string is white so we can use GCWriteNew
+      g->gc->GCWrite(array, string);
       array->size++;
       i++;
     }
@@ -655,7 +655,7 @@ int prStringPathMatch(struct VMGlobals *g, int numArgsPushed)
   ::FindClose(hFind);
   return errNone;
 }
-#endif //#ifndef _WIN32
+#endif //#ifndef SC_WIN32
 
 int prString_Getenv(struct VMGlobals* g, int numArgsPushed);
 int prString_Getenv(struct VMGlobals* g, int /* numArgsPushed */)
@@ -701,7 +701,7 @@ int prString_Setenv(struct VMGlobals* g, int /* numArgsPushed */)
 	if (err) return err;
 
 	if (IsNil(args+1)) {
-#ifdef _WIN32
+#ifdef SC_WIN32
 		SetEnvironmentVariable(key,NULL);
 #else
 		unsetenv(key);
@@ -710,7 +710,7 @@ int prString_Setenv(struct VMGlobals* g, int /* numArgsPushed */)
 		char value[1024];
 		err = slotStrVal(args+1, value, 1024);
 		if (err) return err;
-#ifdef _WIN32
+#ifdef SC_WIN32
 		SetEnvironmentVariable(key, value);
 #else
 		setenv(key, value, 1);
@@ -954,13 +954,14 @@ static void yaml_traverse(struct VMGlobals* g, const YAML::Node & node, PyrObjec
 			node >> out;
 			result = (PyrObject*)newPyrString(g->gc, out.c_str(), 0, true);
 			SetObject(slot, result);
-			if(parent) g->gc->GCWriteNew(parent, result); // we know result is white so we can use GCWriteNew
+			if(parent) g->gc->GCWrite(parent, result);
 			break;
 
 		case YAML::NodeType::Sequence:
 			result = newPyrArray(g->gc, node.size(), 0, true);
+			result->size = 0;
 			SetObject(slot, result);
-			if(parent) g->gc->GCWriteNew(parent, result); // we know result is white so we can use GCWriteNew
+			if(parent) g->gc->GCWrite(parent, result);
 			for (unsigned int i = 0; i < node.size(); i++) {
 				const YAML::Node & subnode = node[i];
 				result->size++;
@@ -972,13 +973,14 @@ static void yaml_traverse(struct VMGlobals* g, const YAML::Node & node, PyrObjec
 		{
 			result = instantiateObject( g->gc, s_dictionary->u.classobj, 0, false, true );
 			SetObject(slot, result);
-			if(parent) g->gc->GCWriteNew(parent, result); // we know result is white so we can use GCWriteNew
+			if(parent) g->gc->GCWrite(parent, result);
 
 			PyrObject *array = newPyrArray(g->gc, node.size()*2, 0, true);
-			result->size = 2;
+			array->size = 0;
+			result->size = 2; // ?
 			SetObject(result->slots, array);      // array
 			SetInt(result->slots+1, node.size()); // size
-			g->gc->GCWriteNew(result, array); // we know array is white so we can use GCWriteNew
+			g->gc->GCWrite(result, array);
 
 			int j = 0;
 			for (YAML::Iterator i = node.begin(); i != node.end(); ++i) {
@@ -988,7 +990,7 @@ static void yaml_traverse(struct VMGlobals* g, const YAML::Node & node, PyrObjec
 				PyrObject *pkey = (PyrObject*)newPyrString(g->gc, out.c_str(), 0, true);
 				SetObject(array->slots+j, pkey);
 				array->size++;
-				g->gc->GCWriteNew(array, pkey); // we know pkey is white so we can use GCWriteNew
+				g->gc->GCWrite(array, pkey);
 
 				array->size++;
 				yaml_traverse(g, value, array, array->slots+j+1);

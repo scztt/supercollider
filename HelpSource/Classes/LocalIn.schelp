@@ -46,7 +46,9 @@ code::
 	var source, local;
 
 	source = Decay.ar(Impulse.ar(0.3), 0.1) * WhiteNoise.ar(0.2);
+
 	local = LocalIn.ar(2) + [source, 0]; // read feedback, add to source
+
 	local = DelayN.ar(local, 0.2, 0.2); // delay sound
 
 	// reverse channels to give ping pong effect, apply decay factor
@@ -83,9 +85,6 @@ code::
 	local = local + in;
 
 	LocalOut.ar(local);
-
-	local
-
 }.play;
 )
 
@@ -124,7 +123,7 @@ code::
 	sound = DelayC.ar(imp + (in * 0.995), 1, 440.reciprocal - ControlRate.ir.reciprocal);
 	LocalOut.ar(sound); // for feedback
 	in
-}.play;
+}.play(s, 0);
 
 // compare pitch
 {
