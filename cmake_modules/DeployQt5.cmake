@@ -113,7 +113,7 @@
 
 include(BundleUtilities)
 set(DeployQt5_cmake_dir "${CMAKE_CURRENT_LIST_DIR}")
-set(DeployQt5_apple_plugins_dir "PlugIns")
+set(DeployQt5_apple_plugins_dir "Plugins")
 
 function(write_qt5_conf qt_conf_dir qt_conf_contents)
   set(qt_conf_path "${qt_conf_dir}/qt.conf")
@@ -318,7 +318,7 @@ function(install_qt5_executable executable)
       get_property(loc TARGET Qt5::QCocoaIntegrationPlugin
         PROPERTY LOCATION_RELEASE)
       install_qt5_plugin("${loc}" "${executable}" 0 installed_plugin_paths
-        "PlugIns" "${component}")
+        "Plugins" "${component}")
       list(APPEND libs ${installed_plugin_paths})
     elseif(WIN32)
       get_property(loc TARGET Qt5::QWindowsIntegrationPlugin

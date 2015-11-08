@@ -2,7 +2,8 @@ Platform {
 	classvar defaultStartupFile;
 
 	// IDE actions
-	classvar <>makeServerWindowAction, <>makeSynthDescWindowAction, <>openHelpFileAction, <>openHTMLFileAction;
+	classvar <>makeServerWindowAction, <>makeSynthDescWindowAction, <>openHelpFileAction, <>openHTMLFileAction,
+	<>openFileAction;
 
 	var <classLibraryDir, <helpDir, <>recordingsDir, features;
 	var <>devpath;
@@ -69,6 +70,20 @@ Platform {
 
 	clearMetadata { |path| ^this.subclassResponsibility }
 	*clearMetadata { |path| ^thisProcess.platform.clearMetadata(path) }
+
+	*doOpenFile {
+		|path|
+		if ('ScIDE'.asClass.notNil and: { 'ScIDE'.asClass.connected }) {
+			'ScIDE'.asClass.open(path);
+		} {
+			if (this.openFileAction.notNil) {
+				this.openFileAction(path);
+			} {
+				thisProcess.interpreter.executeFile(path);
+			}
+
+		}
+	}
 
 	// startup/shutdown hooks
 	startup { }

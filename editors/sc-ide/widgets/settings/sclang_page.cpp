@@ -50,7 +50,7 @@ SclangPage::SclangPage(QWidget *parent) :
     ui->sclang_add_exclude->setIcon( QIcon::fromTheme("list-add") );
     ui->sclang_remove_exclude->setIcon( QIcon::fromTheme("list-remove") );
 
-    ui->runtimeDir->setFileMode(QFileDialog::Directory);
+    ui->runtimeDir->setFileMode(QFileDialog::ExistingFile);
 
     connect(ui->activeConfigFileComboBox, SIGNAL(currentIndexChanged(const QString &)), this, SLOT(changeSelectedLanguageConfig(const QString &)));
     connect(ui->sclang_add_configfile, SIGNAL(clicked()), this, SLOT(dialogCreateNewConfigFile()));
@@ -97,12 +97,26 @@ void SclangPage::load( Manager *s )
     readLanguageConfig();
 }
 
+#define RECENTRUNTIMESCOUNT 20
+    
 void SclangPage::store( Manager *s )
 {
     s->beginGroup("IDE/interpreter");
+    
     s->setValue("autoStart", ui->autoStart->isChecked());
     s->setValue("runtimeDir", ui->runtimeDir->text());
     s->setValue("configFile", ui->activeConfigFileComboBox->currentText());
+
+    QStringList recents = ui->runtimeDir->recentPaths();
+    recents.push_front(ui->runtimeDir->text());
+    recents.removeDuplicates();
+    if (recents.size() > RECENTRUNTIMESCOUNT) { recents = recents.mid(0, RECENTRUNTIMESCOUNT); }
+
+    QVariantList recentsList;
+    foreach (const QString & path, recents)
+        recentsList << QVariant(path);
+    s->setValue("runtimeDirRecent", QVariant::fromValue<QVariantList>(recentsList));
+
     s->endGroup();
 
     writeLanguageConfig();
