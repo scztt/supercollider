@@ -21,7 +21,6 @@
 #include <QCoreApplication>
 #include <QBuffer>
 #include <QTextDocumentFragment>
-#include <QDir>
 
 #include "main.hpp"
 #include "main_window.hpp"
@@ -139,31 +138,11 @@ void ScProcess::startLanguage (void)
 
     settings->endGroup();
 
-    QString sclangCommand = "sclang";
-    QString sclangDevFile = "sclang-dev.txt";
-    
+    QString sclangCommand;
 #ifdef Q_OS_MAC
-    QDir devFilePath(QCoreApplication::applicationDirPath());
-    devFilePath.cd("../../..");
-    
-    if (devFilePath.exists(sclangDevFile)) {
-        QFile file(devFilePath.filePath(sclangDevFile));
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            QString sclangPath = QString(file.readAll());
-            if (devFilePath.cd(sclangPath)) {
-                workingDirectory = devFilePath.absolutePath();
-                scPost(tr("%1 file present, working directory is: %1\n").arg(sclangDevFile).arg(workingDirectory));
-            } else {
-                scPost(tr("%1 file present, but path doesn't exist: %1\n").arg(sclangDevFile).arg(devFilePath.absolutePath()));
-            }
-        }
-    }
-    
-    if (workingDirectory.endsWith(QString(".app"))) {
-        sclangCommand = workingDirectory + QString("/Contents/MacOS/") + sclangCommand;
-    } else {
-        sclangCommand = workingDirectory + "/" + sclangCommand;
-    }
+    sclangCommand = standardDirectory(ScResourceDir) + "/../MacOS/sclang.app/Contents/MacOS/sclang";
+#else
+    sclangCommand = "sclang";
 #endif
 
     QStringList sclangArguments;
@@ -177,7 +156,7 @@ void ScProcess::startLanguage (void)
     QProcess::start(sclangCommand, sclangArguments);
     bool processStarted = QProcess::waitForStarted();
     if (!processStarted)
-        emit statusMessage(tr("Failed to start interpreter! (%1)").arg(QProcess::error()));
+        emit statusMessage(tr("Failed to start interpreter!"));
 }
 
 void ScProcess::recompileClassLibrary (void)

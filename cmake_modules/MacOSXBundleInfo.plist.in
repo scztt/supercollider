@@ -143,7 +143,7 @@
 	<key>CFBundleExecutable</key>
 	<string>${MACOSX_BUNDLE_BUNDLE_NAME}</string>
 	<key>CFBundleIconFile</key>
-	<string>${MACOSX_BUNDLE_ICON_FILE}</string>
+	<string>SCcube</string>
 	<key>CFBundleIdentifier</key>
 	<string>net.sourceforge.supercollider</string>
 	<key>CFBundleInfoDictionaryVersion</key>

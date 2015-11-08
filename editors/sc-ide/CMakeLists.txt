@@ -17,23 +17,15 @@ find_package(Qt5Sql)
 find_package(Qt5Positioning)
 
 set(QT_IDE_LIBRARIES 
-    Qt5::Core Qt5::WebKitWidgets Qt5::OpenGL Qt5::PrintSupport Qt5::Sensors Qt5::Quick Qt5::Qml Qt5::Sql Qt5::Positioning
-)
-
-if (APPLE)
-  find_package(Qt5MacExtras)
-  list(APPEND QT_IDE_LIBRARIES Qt5::MacExtras)
-endif()
+    Qt5::Core Qt5::WebKitWidgets Qt5::OpenGL Qt5::PrintSupport Qt5::Sensors Qt5::Quick Qt5::Qml Qt5::Sql Qt5::Positioning)
 
 if(${CMAKE_COMPILER_IS_GNUCXX})
     add_definitions(-Wreorder)
 endif()
 
 if (APPLE)
-    set(Icons ${CMAKE_SOURCE_DIR}/icons/sc_ide.icns)
-    set_source_files_properties(${Icons} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
-    SET(MACOSX_BUNDLE_ICON_FILE sc_ide.icns)
-    list(APPEND RES_FILES ${Icons})
+    set( Icons ../../icons/SCcube.icns)
+    set_source_files_properties(../../icons/SCcube.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 endif()
 
 set ( ide_moc_hdr
@@ -313,22 +305,16 @@ endif()
 
 # Installation
 if(APPLE)
-    add_dependencies(SuperCollider sclang scsynth)
-
     if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
         set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/Install" CACHE PATH "Install path prefix" FORCE)
     endif()
 
-    include(DeployQt5)
-    include(InstallRequiredSystemLibraries)
+    # set how it shows up in the Info.plist file
+    SET(MACOSX_BUNDLE_ICON_FILE ../../icons/sc_ide.icns)
 
-    # Delete the nested sclang.app BEFORE we do any install/fixup - otherwise, Cmake fixup
-    # mixes the inner app's dependencies with the outer app's dependencies.
-    install(CODE "
-        execute_process(COMMAND rm -rf ${CMAKE_INSTALL_PREFIX}/${scappbundlename}/${scappbundlename}.app/Contents/MacOS)
-    ")
-
-    install(TARGETS SuperCollider DESTINATION ${scappbundlename})
+    install(TARGETS SuperCollider
+        DESTINATION ${scappbundlename}
+        )
 
     # for processing into the plist:
     set_property(TARGET SuperCollider
@@ -336,11 +322,25 @@ if(APPLE)
 
     set(MACOSX_BUNDLE_BUNDLE_NAME "${scappbundlename}")
 
+    include(InstallRequiredSystemLibraries)
+
+    include(DeployQt5)
     install_qt5_executable("${scappbundlename}/${scappbundlename}.app" "" "" "${CMAKE_BINARY_DIR}/lang/sclang;${CMAKE_BINARY_DIR}/external_libraries")
 
+    # install Qt plugins (adapted from kvirc)
+    set(plugin_dest_dir ${CMAKE_INSTALL_PREFIX}/SuperCollider/SuperCollider.app/Contents/Plugins)
+    set(QT_PLUGINS_DIR "${Qt5Widgets_DIR}/../../../plugins")
+    install(DIRECTORY "${QT_PLUGINS_DIR}/" DESTINATION ${plugin_dest_dir} COMPONENT Runtime
+                       FILES_MATCHING REGEX "(platforms)/[^_]*\\.dylib")
+
     install(CODE "
-        execute_process(COMMAND ${CMAKE_SOURCE_DIR}/package/merge-ide.sh -f -m ${CMAKE_INSTALL_PREFIX}/${scappbundlename}/sclang.app ${CMAKE_INSTALL_PREFIX}/${scappbundlename}/${scappbundlename}.app) 
-    ")
+           file(GLOB_RECURSE QTPLUGINS
+                  \"${plugin_dest_dir}/*.dylib\")
+                include(BundleUtilities)
+                fixup_bundle(\"${CMAKE_INSTALL_PREFIX}/SuperCollider/SuperCollider.app\" \"\${QTPLUGINS}\" \"${QT_LIBRARY_DIR}\")
+                #fixup_qt5_executable(\"${CMAKE_INSTALL_PREFIX}/SuperCollider/SuperCollider.app\")
+                " COMPONENT Runtime)
+
 
 elseif(WIN32)
 	install(TARGETS SuperCollider

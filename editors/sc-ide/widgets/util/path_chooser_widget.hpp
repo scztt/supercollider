@@ -21,7 +21,7 @@
 #ifndef SCIDE_WIDGETS_PATH_CHOOSER_WIDGET_HPP_INCLUDED
 #define SCIDE_WIDGETS_PATH_CHOOSER_WIDGET_HPP_INCLUDED
 
-#include <QComboBox>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QFileDialog>
 #include <QHBoxLayout>
@@ -34,45 +34,32 @@ class PathChooserWidget : public QWidget
     Q_OBJECT
 
 public:
-    PathChooserWidget(QWidget *parent = 0, QFileDialog::FileMode mode = QFileDialog::ExistingFile ):
+    PathChooserWidget
+    (QWidget *parent = 0, QFileDialog::FileMode mode = QFileDialog::ExistingFile ):
         QWidget(parent),
         mMode(mode),
         dialog(0)
     {
-        mTextField = new QComboBox;
-        mTextField->setEditable(true);
-        mTextField->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred));
+        mTextField = new QLineEdit;
 
-        mBrowseButton = new QPushButton;
-        mBrowseButton->setIconSize(QSize(24, 24));
-        mBrowseButton->setMaximumSize(QSize(24, 24));
-        mBrowseButton->setSizePolicy(QSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum));
-        mBrowseButton->setFlat(true);
+        mButton = new QPushButton;
+        mButton->setIcon( QIcon::fromTheme("folder") );
+        mButton->setFixedWidth( 30 );
+        mButton->setFlat(true);
+        //setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 
-        QHBoxLayout *box = new QHBoxLayout();
+        QHBoxLayout *box = new QHBoxLayout(this);
         box->addWidget(mTextField);
-        box->addWidget(mBrowseButton);
+        box->addWidget(mButton);
         box->setContentsMargins(0,0,0,0);
-        box->setSpacing(5);
-        
-        setLayout(box);
+        box->setSpacing(1);
 
-        connect(mBrowseButton, SIGNAL(clicked()), this, SLOT(execDialog()), Qt::QueuedConnection);
+        connect(mButton, SIGNAL(clicked()), this, SLOT(execDialog()), Qt::QueuedConnection);
     }
 
-    QString text() const { return mTextField->currentText(); }
+    QString text() const { return mTextField->text(); }
 
-    void setText( const QString & text ) { mTextField->setCurrentText(text); }
-    
-    void setRecentPaths(const QStringList& recents) { mTextField->addItems(recents); }
-    
-    QStringList recentPaths() {
-        QStringList recentPaths;
-        for (int i = 0; i < mTextField->count(); ++i) {
-            recentPaths.push_back(mTextField->itemText(i));
-        }
-        return recentPaths;
-    }
+    void setText( const QString & text ) { mTextField->setText(text); }
 
     void setFileMode( QFileDialog::FileMode mode ) { mMode = mode; }
 
@@ -84,17 +71,13 @@ public Q_SLOTS:
             dialog = new QFileDialog(parent ? parent : this);
         }
         dialog->setFileMode(mMode);
-        dialog->selectFile(mTextField->currentText());
+        dialog->selectFile(mTextField->text());
 
-        QPointer<QComboBox> textField = mTextField;
+        QPointer<QLineEdit> textField = mTextField;
         int result = dialog->exec();
         if (result == QDialog::Accepted && textField) {
             QStringList paths = dialog->selectedFiles();
-            if (paths.count()) {
-                QString path = paths[0];
-                textField->setCurrentText(path);
-                textField->insertItem(0, path);
-            }
+            textField->setText(paths.count() ? paths[0] : "");
         }
     }
 
@@ -102,10 +85,10 @@ Q_SIGNALS:
     void textChanged( const QString & );
 
 private:
+    QLineEdit *mTextField;
+    QPushButton *mButton;
     QFileDialog::FileMode mMode;
-    QComboBox       *mTextField;
-    QPushButton     *mBrowseButton;
-    QFileDialog     *dialog;
+    QFileDialog *dialog;
 };
 
 } // namespace ScIDE

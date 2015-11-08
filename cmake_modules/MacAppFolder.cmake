@@ -12,8 +12,6 @@ if(APPLE)
 
 	set(scappauxresourcesdir "${scappbundlename}/${scappbundlename}.app/Contents/Resources")
 	set(scappbindir "${scappbundlename}/${scappbundlename}.app/Contents/MacOS")
-	set(sclangbindir "${scappbundlename}/sclang.app/Contents/MacOS")
-	set(sclangauxresourcesdir "${scappbundlename}/sclang.app/Contents/Resources")
 
 	###### Allow user to select a FHS-style install
 	# TODO not yet used
