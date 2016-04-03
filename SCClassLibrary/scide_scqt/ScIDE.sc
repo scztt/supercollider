@@ -20,15 +20,13 @@ ScIDE {
 
 	*connect {|ideName|
 		this.prConnect(ideName);
-		defer {
-			this.handshake
-		}
+		this.handshake
 	}
 
 	*handshake {
-		this.prSend(\classLibraryRecompiled);
-		this.prSend(\requestDocumentList);
-		this.prSend(\requestCurrentPath);
+		this.send(\classLibraryRecompiled);
+		this.send(\requestDocumentList);
+		this.send(\requestCurrentPath);
 
 		this.defaultServer = Server.default;
 		this.sendIntrospection;
@@ -38,35 +36,40 @@ ScIDE {
 		serverController.remove;
 		serverController = SimpleController(server)
 		.put(\serverRunning, { | server, what, extraArg |
-			this.prSend(\defaultServerRunningChanged, [
+			this.send(\defaultServerRunningChanged, [
 				server.serverRunning, server.addr.hostname, server.addr.port]);
 		})
 		.put(\default, { | server, what, newServer |
 			("changed default server to:" + newServer.name).postln;
 			this.defaultServer = newServer;
+		})
+		.put(\dumpOSC, { | volume, what, code |
+			this.send( if(code.asBoolean, \dumpOSCStarted, \dumpOSCStopped) );
 		});
 
 		volumeController.remove;
 		volumeController = SimpleController(server.volume)
 		.put(\mute, { | volume, what, muted |
-			this.prSend( if(muted, \serverMuted, \serverUnmuted) );
+			this.send( if(muted, \serverMuted, \serverUnmuted) );
 		})
 		.put(\amp, { | volume, what, amp |
 			if (not(suppressAmpResponse)) {
-				this.prSend( \serverAmp, amp.asString );
+				this.send( \serverAmp, amp.asString );
 			};
 		})
 		.put(\ampRange, { |volume, what, min, max|
-			this.prSend( \serverAmpRange, "%,%".format(min, max) );
+			this.send( \serverAmpRange, "%,%".format(min, max) );
 		});
 
 		defaultServer = server;
 
-		this.prSend(\defaultServerRunningChanged, [
+		this.send(\defaultServerRunningChanged, [
 			server.serverRunning, server.addr.hostname, server.addr.port]);
-		this.prSend( if (server.volume.isMuted, \serverMuted, \serverUnmuted) );
-		this.prSend( \serverAmpRange, "%,%".format(server.volume.min, server.volume.max) );
-		this.prSend( \serverAmp, server.volume.volume.asString );
+		this.send( if(server.volume.isMuted, \serverMuted, \serverUnmuted) );
+		this.send( if(server.dumpMode.asBoolean, \dumpOSCStarted, \dumpOSCStopped) );
+		this.send( \serverAmpRange, "%,%".format(server.volume.min, server.volume.max) );
+		this.send( \serverAmp, server.volume.volume.asString );
+
 	}
 
 	*request { |id, command, data|
@@ -99,11 +102,11 @@ ScIDE {
 			];
 			res = res.add(classData);
 		};
-		this.prSend(\introspection, res);
+		this.send(\introspection, res);
 	}
 
 	*sendAllClasses { |id|
-		this.prSend(id, Class.allClasses.collectAs(_.asString, Array))
+		this.send(id, Class.allClasses.collectAs(_.asString, Array))
 	}
 
 	*sendSymbolTable { |id|
@@ -125,7 +128,7 @@ ScIDE {
 
 		"ScIDE: Built symbol table in % seconds\n".postf(dt.asStringPrec(3));
 
-		this.prSend(id, result)
+		this.send(id, result)
 	}
 
 	*completeClass { |id, text|
@@ -137,7 +140,7 @@ ScIDE {
 			};
 		};
 		if (res.size > 0) {
-			this.prSend(id, res);
+			this.send(id, res);
 		};
 	}
 
@@ -160,7 +163,7 @@ ScIDE {
 				class = class.superclass;
 			};
 			res = methods.values.collect { |m| this.serializeMethod(m) };
-			if (res.size > 0) { this.prSend(id, res) };
+			if (res.size > 0) { this.send(id, res) };
 		}
 	}
 
@@ -175,7 +178,7 @@ ScIDE {
 				};
 			};
 		};
-		if (res.size > 0) { this.prSend(id, res) };
+		if (res.size > 0) { this.send(id, res) };
 	}
 
 	*findMethod { |id, text|
@@ -202,7 +205,7 @@ ScIDE {
 				warn("No such method:" + cname.asString ++ "." ++ mname.asString);
 				^this;
 			};
-			this.prSend(id, [this.serializeMethod(method)]);
+			this.send(id, [this.serializeMethod(method)]);
 		}{
 			res = [];
 			this.allMethodsDo { |method|
@@ -211,7 +214,7 @@ ScIDE {
 				};
 			};
 			if (res.size > 0) {
-				this.prSend(id, res)
+				this.send(id, res)
 			}{
 				warn("No such method:" + mname.asString);
 				^this;
@@ -285,12 +288,12 @@ ScIDE {
 			}
 		};
 
-		ScIDE.prSend(requestId, [symbol, result.asArray])
+		this.send(requestId, [symbol, result.asArray])
 	}
 
 	*openHelpUrl { |url|
-		ScIDE.processUrl(url, { |processedUrl|
-			this.prSend("openHelpUrl", processedUrl.asString)
+		this.processUrl(url, { |processedUrl|
+			this.send("openHelpUrl", processedUrl.asString)
 		});
 	}
 
@@ -325,12 +328,12 @@ ScIDE {
 	// Document Support //////////////////////////////////////////////////
 
 	*newDocument {|title="Untitled", string="", id|
-		this.prSend(\newDocument, [title, string, id]);
+		this.send(\newDocument, [title, string, id]);
 	}
 
 
 	*open { |path, charPos = 0, selectionLength = 0, id|
-		this.prSend(\openFile, [path, charPos, selectionLength, id])
+		this.send(\openFile, [path, charPos, selectionLength, id])
 	}
 
 	*getQUuid {
@@ -339,47 +342,77 @@ ScIDE {
 	}
 
 	*getTextByQUuid {|quuid, funcID, start = 0, range = -1|
-		this.prSend(\getDocumentText, [quuid, funcID, start, range]);
+		this.send(\getDocumentText, [quuid, funcID, start, range]);
 	}
 
 	*setTextByQUuid {|quuid, funcID, text, start = 0, range = -1|
-		this.prSend(\setDocumentText, [quuid, funcID, text, start, range]);
+		this.send(\setDocumentText, [quuid, funcID, text, start, range]);
+	}
+
+    *setSelectionByQUuid {|quuid, start, length|
+        this.send(\setDocumentSelection, [quuid, start, length]);
+    }
+
+	*setEditablebyQUuid {|quuid, editable|
+		this.send(\setDocumentEditable, [quuid, editable]);
+	}
+
+	*setPromptsToSavebyQUuid {|quuid, prompts|
+		this.send(\setDocumentPromptsToSave, [quuid, prompts]);
 	}
 
 	*setCurrentDocumentByQUuid {|quuid|
-		this.prSend(\setCurrentDocument, [quuid]);
+		this.send(\setCurrentDocument, [quuid]);
+	}
+
+	*removeDocUndoByQUuid {|quuid|
+		this.send(\removeDocUndo, [quuid]);
 	}
 
 	*close {|quuid|
-		this.prSend(\closeDocument, [quuid]);
+		this.send(\closeDocument, [quuid]);
 	}
 
 	*setDocumentTitle {|quuid, newTitle|
-		this.prSend(\setDocumentTitle, [quuid, newTitle]);
+		this.send(\setDocumentTitle, [quuid, newTitle]);
 	}
 
 	*setDocumentKeyDownEnabled {|quuid, bool|
-		this.prSend(\enableDocumentKeyDownAction, [quuid, bool]);
+		this.send(\enableDocumentKeyDownAction, [quuid, bool]);
 	}
 
 	*setDocumentKeyUpEnabled {|quuid, bool|
-		this.prSend(\enableDocumentKeyUpAction, [quuid, bool]);
+		this.send(\enableDocumentKeyUpAction, [quuid, bool]);
+	}
+
+	*setDocumentGlobalKeyDownEnabled {|bool|
+		this.send(\enableDocumentGlobalKeyDownAction, [bool]);
+	}
+
+	*setDocumentGlobalKeyUpEnabled {|bool|
+		this.send(\enableDocumentGlobalKeyUpAction, [bool]);
 	}
 
 	*setDocumentMouseDownEnabled {|quuid, bool|
-		this.prSend(\enableDocumentMouseDownAction, [quuid, bool]);
+		this.send(\enableDocumentMouseDownAction, [quuid, bool]);
 	}
 
 	*setDocumentMouseUpEnabled {|quuid, bool|
-		this.prSend(\enableDocumentMouseUpAction, [quuid, bool]);
+		this.send(\enableDocumentMouseUpAction, [quuid, bool]);
 	}
 
 	*setDocumentTextChangedEnabled {|quuid, bool|
-		this.prSend(\enableDocumentTextChangedAction, [quuid, bool]);
+		this.send(\enableDocumentTextChangedAction, [quuid, bool]);
 	}
 
 	*setDocumentTextMirrorEnabled {|bool|
-		this.prSend(\enableDocumentTextMirror, [bool]);
+		this.send(\enableDocumentTextMirror, [bool]);
+	}
+
+	*send { |id, data|
+		defer {
+			this.prSend(id, data)
+		}
 	}
 
 
@@ -407,7 +440,7 @@ Document {
 	var <>toFrontAction, <>endFrontAction, <>onClose, <textChangedAction;
 
 	var <envir, savedEnvir;
-	var <editable;
+	var <editable = true, <promptToSave = true;
 
 	*initClass{
 		asyncActions = IdentityDictionary.new;
@@ -436,19 +469,19 @@ Document {
 		^doc
 	}
 
-	*syncFromIDE {|quuid, title, chars, isEdited, path|
+	*syncFromIDE {|quuid, title, chars, isEdited, path, selStart, selSize|
 		var doc;
 		isEdited = isEdited.booleanValue;
 		chars = String.fill(chars.size, {|i| chars[i].asAscii});
 		title = String.fill(title.size, {|i| title[i].asAscii});
 		path = String.fill(path.size, {|i| path[i].asAscii});
 		if((doc = this.findByQUuid(quuid)).isNil, {
-			doc = super.new.initFromIDE(quuid, title, chars, isEdited, path);
+			doc = super.new.initFromIDE(quuid, title, chars, isEdited, path, selStart, selSize);
 			allDocuments = allDocuments.add(doc);
-		}, {doc.initFromIDE(quuid, title, chars, isEdited, path)});
+		}, {doc.initFromIDE(quuid, title, chars, isEdited, path, selStart, selSize)});
 	}
 
-	*syncDocs {|docInfo| // [quuid, title, string, isEdited, path]
+	*syncDocs {|docInfo| // [quuid, title, string, isEdited, path, selStart, selSize]
 		docInfo.do({|info| this.syncFromIDE(*info) });
 	}
 
@@ -548,10 +581,11 @@ Document {
 		isEdited = argisEdited;
 	}
 
-	initFromIDE {|id, argtitle, argstring, argisEdited, argPath|
+    initFromIDE {|id, argtitle, argstring, argisEdited, argPath, selStart, selSize|
 		quuid = id;
 		title = argtitle;
 		this.prSetTextMirror(id, argstring, 0, -1);
+        this.prSetSelectionMirror(id, selStart, selSize);
 		isEdited = argisEdited;
 		path = argPath;
 	}
@@ -610,6 +644,11 @@ Document {
 		this.primitiveFailed
 	}
 
+    prSetSelectionMirror {|quuid, start, size|
+		_ScIDE_SetDocSelectionMirror
+		this.primitiveFailed
+	}
+
 	text_ {|string|
 		this.prSetText(string);
 	}
@@ -651,32 +690,36 @@ Document {
 
 	keyDown { | modifiers, unicode, keycode, key |
 		var character = unicode.asAscii;
-		this.class.globalKeyDownAction.value(this,character, modifiers, unicode, keycode);
-		keyDownAction.value(this,character, modifiers, unicode, keycode, key);
+		var cocoaModifiers = QKeyModifiers.toCocoa(modifiers);
+		this.class.globalKeyDownAction.value(this,character, cocoaModifiers, unicode, keycode);
+		keyDownAction.value(this,character, cocoaModifiers, unicode, keycode, key);
 	}
 
 	keyUp { | modifiers, unicode, keycode, key |
 		var character = unicode.asAscii;
-		this.class.globalKeyUpAction.value(this,character, modifiers, unicode, keycode);
-		keyUpAction.value(this,character, modifiers, unicode, keycode, key);
+		var cocoaModifiers = QKeyModifiers.toCocoa(modifiers);
+		this.class.globalKeyUpAction.value(this,character, cocoaModifiers, unicode, keycode);
+		keyUpAction.value(this,character, cocoaModifiers, unicode, keycode, key);
 	}
 
 	mouseDown { | x, y, modifiers, buttonNumber, clickCount |
-		mouseDownAction.value(this, x, y, modifiers, buttonNumber, clickCount)
+		var cocoaModifiers = QKeyModifiers.toCocoa(modifiers);
+		mouseDownAction.value(this, x, y, cocoaModifiers, buttonNumber, clickCount)
 	}
 
 	mouseUp { | x, y, modifiers, buttonNumber |
-		mouseUpAction.value(this, x, y, modifiers, buttonNumber)
+		var cocoaModifiers = QKeyModifiers.toCocoa(modifiers);
+		mouseUpAction.value(this, x, y, cocoaModifiers, buttonNumber)
 	}
 
 	keyDownAction_ {|action|
 		keyDownAction = action;
-		ScIDE.setDocumentKeyDownEnabled(quuid, action.notNil || globalKeyDownAction.notNil);
+		ScIDE.setDocumentKeyDownEnabled(quuid, action.notNil);
 	}
 
 	keyUpAction_ {|action|
 		keyUpAction = action;
-		ScIDE.setDocumentKeyUpEnabled(quuid, action.notNil  || globalKeyUpAction.notNil);
+		ScIDE.setDocumentKeyUpEnabled(quuid, action.notNil);
 	}
 
 	mouseDownAction_ {|action|
@@ -696,16 +739,12 @@ Document {
 
 	*globalKeyDownAction_ {|action|
 		globalKeyDownAction = action;
-		allDocuments.do({|doc|
-			ScIDE.setDocumentKeyDownEnabled(doc.quuid, action.notNil || doc.keyDownAction.notNil);
-		});
+		ScIDE.setDocumentGlobalKeyDownEnabled(action.notNil);
 	}
 
 	*globalKeyUpAction_ {|action|
 		globalKeyUpAction = action;
-		allDocuments.do({|doc|
-			ScIDE.setDocumentKeyUpEnabled(doc.quuid, action.notNil || doc.keyUpAction.notNil);
-		});
+		ScIDE.setDocumentGlobalKeyUpEnabled(action.notNil);
 	}
 
 	title_ {|newTitle|
@@ -745,11 +784,21 @@ Document {
 	}
 
 	selectionStart {
-		^this.selectedRangeLocation
+		^this.prGetSelectionStart(quuid)
+	}
+
+	prGetSelectionStart {|id|
+		_ScIDE_GetDocSelectionStart
+		^this.primitiveFailed;
 	}
 
 	selectionSize {
-		^this.selectedRangeSize
+		^this.prGetSelectionRange(quuid)
+	}
+
+	prGetSelectionRange {|id|
+		_ScIDE_GetDocSelectionRange
+		^this.primitiveFailed;
 	}
 
 	string { | rangestart, rangesize = 1 |
@@ -760,15 +809,15 @@ Document {
 	}
 
 	string_ { | string, rangestart = -1, rangesize = 1 |
-		this.insertTextRange(string, rangestart, rangesize);
+		this.prSetText(string, nil, rangestart, rangesize);
 	}
 
 	selectedString {
-		^this.selectedText
+		^this.rangeText(this.selectionStart, this.selectionSize);
 	}
 
 	selectedString_ { | txt |
-		this.prinsertText(txt)
+		this.prSetText(txt, nil, this.selectionStart, this.selectionSize);
 	}
 
 	currentLine {
@@ -840,42 +889,37 @@ Document {
 		}
 	}
 
-	// not yet implemented
-
 	selectLine { | line |
-		this.notYetImplemented
+		var text, breaks, numLines, start = 0, end;
+		if(line < 1, { line = 1 });
+		text = this.text;
+		breaks = text.findAll("\n");
+		numLines = breaks.size + 1;
+		line = min(line, numLines);
+		if(line > 1, { start = breaks[line - 2] + 1});
+		end = breaks[line - 1] ?? { text.size };
+		this.selectRange(start, end - start);
 	}
 
 	selectRange { | start=0, length=0 |
-		^this.notYetImplemented
-	}
+		this.prSetSelectionMirror(quuid, start, length); // set the backend mirror
+        ScIDE.setSelectionByQUuid(quuid, start, length); // set the IDE doc
+    }
 
-	editable_ { | abool=true |
-		editable = abool;
-		this.notYetImplemented
-	}
-
-	removeUndo {
-		^this.notYetImplemented
+	editable_ { | bool=true |
+		editable = bool;
+		ScIDE.setEditablebyQUuid(quuid, bool);
 	}
 
 	promptToSave_ { | bool |
-		^this.notYetImplemented
+		promptToSave = bool;
+		ScIDE.setPromptsToSavebyQUuid(quuid, bool);
 	}
 
-	promptToSave {
-		^this.notYetImplemented
-	}
-
-	prinsertText { | dataPtr, txt |
-		^this.notYetImplemented
-	}
-
-	insertTextRange { | string, rangestart, rangesize |
-		^this.notYetImplemented
+	removeUndo {
+		ScIDE.removeDocUndoByQUuid(quuid);
 	}
 
 	// probably still needed for compatibility
 	*implementationClass { ^this }
 }
-

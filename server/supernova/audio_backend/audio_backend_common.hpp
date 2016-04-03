@@ -1,5 +1,5 @@
 //  audio backend helpers
-//  Copyright (C) 2010 Tim Blechmann
+//  Copyright (C) 2010-2015 Tim Blechmann
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -22,13 +22,13 @@
 #include <vector>
 
 #include <boost/mpl/if.hpp>
+#include <boost/align/aligned_allocator.hpp>
 
 #include "nova-simd/simd_memory.hpp"
 #include "nova-tt/dummy_mutex.hpp"
 #include "nova-tt/spin_lock.hpp"
 
 #include "utilities/malloc_aligned.hpp"
-
 
 namespace nova   {
 namespace detail {
@@ -137,18 +137,18 @@ protected:
     }
 
     std::vector<aligned_storage_ptr<sample_type, managed_memory>,
-                aligned_allocator<aligned_storage_ptr<sample_type, managed_memory>> > input_samples, output_samples;
+                boost::alignment::aligned_allocator<aligned_storage_ptr<sample_type, managed_memory>, 64>> input_samples, output_samples;
 };
 
 class audio_settings_basic
 {
 protected:
-    float samplerate_;
-    uint16_t input_channels, output_channels;
+    float samplerate_ = 0.f;
+    uint16_t input_channels = 0;
+    uint16_t output_channels = 0;
 
 public:
-    audio_settings_basic(void):
-        samplerate_(0.f), input_channels(0), output_channels(0)
+    audio_settings_basic(void)
     {}
 
     float get_samplerate(void) const

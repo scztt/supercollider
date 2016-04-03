@@ -246,6 +246,106 @@ void GraphDef_ReadVariant(World *inWorld, char*& buffer, GraphDef* inGraphDef, G
 	}
 }
 
+
+typedef struct IndexMap {
+	uint32 index;
+	uint32 paramSpecIndex;
+} IndexMap;
+
+static inline bool sortIndexMaps(IndexMap map1, IndexMap map2)
+{
+	return map1.paramSpecIndex < map2.paramSpecIndex;
+}
+
+// ver 2
+inline static void calcParamSpecs(GraphDef* graphDef, char*& buffer)
+{
+	if (graphDef->mNumParamSpecs) {
+		int hashTableSize = NEXTPOWEROFTWO(graphDef->mNumParamSpecs);
+		graphDef->mParamSpecTable = new ParamSpecTable(&gMalloc, hashTableSize, false);
+		uint32 nSpecs = graphDef->mNumParamSpecs;
+		graphDef->mParamSpecs = (ParamSpec*)malloc(nSpecs * sizeof(ParamSpec));
+		IndexMap *tempMaps = (IndexMap*)malloc(nSpecs * sizeof(IndexMap));
+
+		for (uint32 i=0; i<nSpecs; ++i) {
+			ParamSpec *paramSpec = graphDef->mParamSpecs + i;
+			ParamSpec_Read(paramSpec, buffer);
+			graphDef->mParamSpecTable->Add(paramSpec);
+			IndexMap *tempMap = tempMaps + i;
+			tempMap->index = i;
+			tempMap->paramSpecIndex = paramSpec->mIndex;
+		}
+		// calculate numChannels for each spec
+		// printf("\n\n**************\n");
+		std::sort(tempMaps, tempMaps + nSpecs, sortIndexMaps);
+		for (uint32 i=0; i<(nSpecs - 1); ++i) {
+			IndexMap *tempMap = tempMaps + i;
+			IndexMap *nextTempMap = tempMap + 1;
+			ParamSpec *paramSpec = graphDef->mParamSpecs + tempMap->index;
+			paramSpec->mNumChannels = nextTempMap->paramSpecIndex - tempMap->paramSpecIndex;
+			// printf("%s: numChannels = %i\n", paramSpec->mName, paramSpec->mNumChannels);
+		}
+
+		IndexMap *tempMap = tempMaps + nSpecs - 1;
+		ParamSpec *paramSpec = graphDef->mParamSpecs + tempMap->index;
+		paramSpec->mNumChannels = graphDef->mNumControls - tempMap->paramSpecIndex;
+
+		// printf("%s: numChannels = %i\n", paramSpec->mName, paramSpec->mNumChannels, paramSpec->mIndex);
+
+		free(tempMaps);
+	} else {
+		// empty table to eliminate test in Graph_SetControl
+		graphDef->mParamSpecTable = new ParamSpecTable(&gMalloc, 4, false);
+		graphDef->mParamSpecs = 0;
+	}
+
+}
+
+// ver 1
+
+inline static void calcParamSpecs1(GraphDef* graphDef, char*& buffer)
+{
+	if (graphDef->mNumParamSpecs) {
+		int hashTableSize = NEXTPOWEROFTWO(graphDef->mNumParamSpecs);
+		graphDef->mParamSpecTable = new ParamSpecTable(&gMalloc, hashTableSize, false);
+		uint32 nSpecs = graphDef->mNumParamSpecs;
+		graphDef->mParamSpecs = (ParamSpec*)malloc(nSpecs * sizeof(ParamSpec));
+		IndexMap *tempMaps = (IndexMap*)malloc(nSpecs * sizeof(IndexMap));
+		
+		for (uint32 i=0; i<nSpecs; ++i) {
+			ParamSpec *paramSpec = graphDef->mParamSpecs + i;
+			ParamSpec_ReadVer1(paramSpec, buffer); // read version 1 (the only difference to ver 2).
+			graphDef->mParamSpecTable->Add(paramSpec);
+			IndexMap *tempMap = tempMaps + i;
+			tempMap->index = i;
+			tempMap->paramSpecIndex = paramSpec->mIndex;
+		}
+		// calculate numChannels for each spec
+		// printf("\n\n**************\n");
+		std::sort(tempMaps, tempMaps + nSpecs, sortIndexMaps);
+		for (uint32 i=0; i<(nSpecs - 1); ++i) {
+			IndexMap *tempMap = tempMaps + i;
+			IndexMap *nextTempMap = tempMap + 1;
+			ParamSpec *paramSpec = graphDef->mParamSpecs + tempMap->index;
+			paramSpec->mNumChannels = nextTempMap->paramSpecIndex - tempMap->paramSpecIndex;
+			// printf("%s: numChannels = %i\n", paramSpec->mName, paramSpec->mNumChannels);
+		}
+		
+		IndexMap *tempMap = tempMaps + nSpecs - 1;
+		ParamSpec *paramSpec = graphDef->mParamSpecs + tempMap->index;
+		paramSpec->mNumChannels = graphDef->mNumControls - tempMap->paramSpecIndex;
+		
+		// printf("%s: numChannels = %i\n", paramSpec->mName, paramSpec->mNumChannels, paramSpec->mIndex);
+		
+		free(tempMaps);
+	} else {
+		// empty table to eliminate test in Graph_SetControl
+		graphDef->mParamSpecTable = new ParamSpecTable(&gMalloc, 4, false);
+		graphDef->mParamSpecs = 0;
+	}
+	
+}
+
 // ver 2
 GraphDef* GraphDef_Read(World *inWorld, char*& buffer, GraphDef* inList, int32 inVersion)
 {
@@ -276,20 +376,8 @@ GraphDef* GraphDef_Read(World *inWorld, char*& buffer, GraphDef* inList, int32 i
 	}
 
 	graphDef->mNumParamSpecs = readInt32_be(buffer);
-	if (graphDef->mNumParamSpecs) {
-		int hashTableSize = NEXTPOWEROFTWO(graphDef->mNumParamSpecs);
-		graphDef->mParamSpecTable = new ParamSpecTable(&gMalloc, hashTableSize, false);
-		graphDef->mParamSpecs = (ParamSpec*)malloc(graphDef->mNumParamSpecs * sizeof(ParamSpec));
-		for (uint32 i=0; i<graphDef->mNumParamSpecs; ++i) {
-			ParamSpec *paramSpec = graphDef->mParamSpecs + i;
-			ParamSpec_Read(paramSpec, buffer);
-			graphDef->mParamSpecTable->Add(paramSpec);
-		}
-	} else {
-		// empty table to eliminate test in Graph_SetControl
-		graphDef->mParamSpecTable = new ParamSpecTable(&gMalloc, 4, false);
-		graphDef->mParamSpecs = 0;
-	}
+
+	calcParamSpecs(graphDef, buffer);
 
 	graphDef->mNumWires = graphDef->mNumConstants;
 	graphDef->mNumUnitSpecs = readInt32_be(buffer);
@@ -384,20 +472,7 @@ GraphDef* GraphDef_ReadVer1(World *inWorld, char*& buffer, GraphDef* inList, int
 	}
 
 	graphDef->mNumParamSpecs = readInt16_be(buffer);
-	if (graphDef->mNumParamSpecs) {
-		int hashTableSize = NEXTPOWEROFTWO(graphDef->mNumParamSpecs);
-		graphDef->mParamSpecTable = new ParamSpecTable(&gMalloc, hashTableSize, false);
-		graphDef->mParamSpecs = (ParamSpec*)malloc(graphDef->mNumParamSpecs * sizeof(ParamSpec));
-		for (uint32 i=0; i<graphDef->mNumParamSpecs; ++i) {
-			ParamSpec *paramSpec = graphDef->mParamSpecs + i;
-			ParamSpec_ReadVer1(paramSpec, buffer);
-			graphDef->mParamSpecTable->Add(paramSpec);
-		}
-	} else {
-		// empty table to eliminate test in Graph_SetControl
-		graphDef->mParamSpecTable = new ParamSpecTable(&gMalloc, 4, false);
-		graphDef->mParamSpecs = 0;
-	}
+	calcParamSpecs1(graphDef, buffer);
 
 	graphDef->mNumWires = graphDef->mNumConstants;
 	graphDef->mNumUnitSpecs = readInt16_be(buffer);
@@ -485,26 +560,46 @@ void GraphDef_Define(World *inWorld, GraphDef *inList)
 	}
 }
 
-void GraphDef_Remove(World *inWorld, int32 *inName)
+#include "SC_SequencedCommand.h"
+#include "SC_Errors.h"
+SCErr GraphDef_Remove(World *inWorld, int32 *inName)
 {
 	GraphDef* graphDef = World_GetGraphDef(inWorld, inName);
 	if (graphDef) {
 		World_RemoveGraphDef(inWorld, graphDef);
 		if (--graphDef->mRefCount == 0) {
-			GraphDef_DeleteMsg(inWorld, graphDef);
+			return GraphDef_DeleteMsg(inWorld, graphDef);
 		}
 	}
+    return kSCErr_None;
 }
 
-void GraphDef_DeleteMsg(World *inWorld, GraphDef *inDef)
+SCErr SendReplyCmd_d_removed(World * inWorld,int inSize,char* inData, ReplyAddress *inReply)
 {
-	DeleteGraphDefMsg msg;
+	void* space = World_Alloc(inWorld, sizeof(SendReplyCmd)); 
+	SendReplyCmd *cmd = new (space) SendReplyCmd(inWorld, inReply); 
+	if (!cmd) return kSCErr_Failed; 
+	int err = cmd->Init(inData, inSize); 
+	if (err) { 
+		cmd->~SendReplyCmd(); 
+		World_Free(inWorld, space); 
+		return err; 
+	} 
+	if (inWorld->mRealTime) cmd->CallNextStage(); 
+	else cmd->CallEveryStage();
+    return kSCErr_None;
+}
+
+SCErr GraphDef_DeleteMsg(World *inWorld, GraphDef *inDef)
+{
+
+    DeleteGraphDefMsg msg;
 	msg.mDef = inDef;
 	inWorld->hw->mDeleteGraphDefs.Write(msg);
 
 	small_scpacket packet;
 	packet.adds("/d_removed");
-	packet.maketags(1);
+	packet.maketags(2);
 	packet.addtag(',');
 	packet.addtag('s');
 	packet.adds((char*)inDef->mNodeDef.mName);
@@ -512,8 +607,11 @@ void GraphDef_DeleteMsg(World *inWorld, GraphDef *inDef)
 	ReplyAddress *users = inWorld->hw->mUsers;
 	int numUsers = inWorld->hw->mNumUsers;
 	for (int i=0; i<numUsers; ++i) {
-		SendReply(users+i, packet.data(), packet.size());
+        SCErr err = SendReplyCmd_d_removed(inWorld, packet.size(), packet.data(), users+i);
+        if(err!=kSCErr_None)
+            return err;
 	}
+    return kSCErr_None;
 }
 
 GraphDef* GraphDef_Recv(World *inWorld, char *buffer, GraphDef *inList)

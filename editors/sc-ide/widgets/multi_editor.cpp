@@ -55,7 +55,11 @@ class DocumentSelectPopUp : public QDialog
 {
 public:
     DocumentSelectPopUp(const CodeEditorBox::History & history, QWidget * parent):
-        QDialog(parent, Qt::Popup)
+    #ifndef Q_OS_MAC
+        QDialog(parent, Qt::Popup  | Qt::FramelessWindowHint)
+    #else
+        QDialog(parent, Qt::Dialog | Qt::FramelessWindowHint)
+    #endif
     {
         mModel = new QStandardItemModel(this);
         populateModel(history);
@@ -193,23 +197,99 @@ private:
     QStandardItemModel *mModel;
 };
 
+EditorTabBar::EditorTabBar(QWidget *parent):
+    QTabBar(parent)
+{
+    setDocumentMode(true);
+    setTabsClosable(true);
+    setMovable(true);
+    setUsesScrollButtons(true);
+    setDrawBase(true);
+    setElideMode(Qt::ElideNone);
+}
+
+void EditorTabBar::mousePressEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::RightButton) {
+        showContextMenu(event);
+        event->accept();
+        return;
+    }
+
+    QTabBar::mousePressEvent(event);
+}
+
+
+void EditorTabBar::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton) {
+        if (tabAt(event->pos()) == -1) { // no tab under cursor
+            MainWindow::instance()->newDocument();
+            event->accept();
+            return;
+        }
+    }
+
+    QTabBar::mouseDoubleClickEvent(event);
+}
+
+void EditorTabBar::showContextMenu(QMouseEvent * event)
+{
+    mTabUnderCursor = tabAt(event->pos());
+
+    QMenu * menu = new QMenu(this);
+
+    menu->addAction(tr("Close"),                   this, SLOT(onCloseTab())           );
+    menu->addAction(tr("Close Other Tabs"),        this, SLOT(onCloseOtherTabs())     );
+    menu->addAction(tr("Close Tabs to the Right"), this, SLOT(onCloseTabsToTheRight()));
+
+    menu->popup(event->pos());
+}
+
+void EditorTabBar::onCloseTab()
+{
+    Document* doc = tabData(mTabUnderCursor).value<Document*>();
+    assert(doc);
+
+    MainWindow::close(doc);
+}
+
+void EditorTabBar::onCloseOtherTabs()
+{
+    QVector<Document*> docsToClose;
+
+    for(int currentTab = 0; currentTab != count(); ++currentTab) {
+        if (currentTab != mTabUnderCursor)
+            docsToClose.append(tabData(currentTab).value<Document*>());
+    }
+
+    for( Document * doc : docsToClose )
+        MainWindow::close(doc);
+}
+
+void EditorTabBar::onCloseTabsToTheRight()
+{
+    QVector<Document*> docsToClose;
+
+    for(int currentTab = mTabUnderCursor + 1; currentTab != count(); ++currentTab)
+        docsToClose.append(tabData(currentTab).value<Document*>());
+
+    for( Document * doc : docsToClose )
+        MainWindow::close(doc);
+}
+
+
 MultiEditor::MultiEditor( Main *main, QWidget * parent ) :
     QWidget(parent),
     mEditorSigMux(new SignalMultiplexer(this)),
     mBoxSigMux(new SignalMultiplexer(this)),
-#ifdef SC_DARWIN
+#ifdef __APPLE__
     mDocModifiedIcon( QApplication::style()->standardIcon(QStyle::SP_DriveHDIcon) )
 #else
     mDocModifiedIcon( QIcon::fromTheme("document-save") )
 #endif
 {
-    mTabs = new QTabBar;
-    mTabs->setDocumentMode(true);
-    mTabs->setTabsClosable(true);
-    mTabs->setMovable(true);
-    mTabs->setUsesScrollButtons(true);
-    mTabs->setDrawBase(true);
-    mTabs->setElideMode(Qt::ElideNone);
+    mTabs = new EditorTabBar;
 
     CodeEditorBox *defaultBox = newBox();
 
@@ -224,9 +304,6 @@ MultiEditor::MultiEditor( Main *main, QWidget * parent ) :
     setLayout(l);
 
     makeSignalConnections();
-
-    mBoxSigMux->connect(SIGNAL(currentChanged(GenericCodeEditor*)),
-                        this, SLOT(onCurrentEditorChanged(GenericCodeEditor*)));
 
     connect( &mDocModifiedSigMap, SIGNAL(mapped(QObject*)), this, SLOT(onDocModified(QObject*)) );
 
@@ -259,6 +336,10 @@ void MultiEditor::makeSignalConnections()
             this, SLOT(onCurrentTabChanged(int)));
     connect(mTabs, SIGNAL(tabCloseRequested(int)),
             this, SLOT(onCloseRequest(int)));
+
+    mBoxSigMux->connect(SIGNAL(currentChanged(GenericCodeEditor*)),
+            this, SLOT(onCurrentEditorChanged(GenericCodeEditor*)));
+    
 }
 
 void MultiEditor::breakSignalConnections()
@@ -266,6 +347,7 @@ void MultiEditor::breakSignalConnections()
     DocumentManager *docManager = Main::documentManager();
     docManager->disconnect(this);
     mTabs->disconnect(this);
+    mBoxSigMux->disconnect(this);
 }
 
 void MultiEditor::createActions()
@@ -386,6 +468,15 @@ void MultiEditor::createActions()
     mEditorSigMux->connect(action, SIGNAL(triggered()), SLOT(moveLineDown()));
     settings->addAction( action, "editor-move-line-down", editorCategory);
 
+    mActions[DeleteWord] = action = new QAction(
+        QIcon::fromTheme("edit-deleteword"), tr("Delete Word"), this);
+#ifdef Q_OS_MAC
+    action->setShortcut(tr("Meta+W", "Delete Word"));
+#endif
+    action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    mEditorSigMux->connect(action, SIGNAL(triggered()), SLOT(deleteWord()));
+    settings->addAction(action, "delete-word", editorCategory);
+
     mActions[GotoPreviousBlock] = action = new QAction(
         QIcon::fromTheme("edit-gotopreviousblock"), tr("Go to Previous Block"), this);
     action->setShortcut(tr("Ctrl+[", "Go to Previous Block"));
@@ -481,6 +572,11 @@ void MultiEditor::createActions()
     mActions[ShowWhitespace] = action = new QAction(tr("Show Spaces and Tabs"), this);
     action->setCheckable(true);
     action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+#ifdef Q_OS_MAC
+    action->setShortcut( QKeySequence( Qt::META | Qt::Key_E, Qt::META | Qt::Key_V ) );
+#else
+    action->setShortcut( QKeySequence( Qt::ALT | Qt::Key_E, Qt::ALT | Qt::Key_V ) );
+#endif
     connect(action, SIGNAL(triggered(bool)), this, SLOT(setShowWhitespace(bool)));
     settings->addAction( action, "editor-toggle-show-whitespace", editorCategory);
 
@@ -490,6 +586,11 @@ void MultiEditor::createActions()
     action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     connect(action, SIGNAL(triggered(bool)), this, SLOT(setShowLinenumber(bool)));
     settings->addAction( action, "editor-toggle-show-line-number", editorCategory);
+
+    mActions[ShowAutocompleteHelp] = action = new QAction(tr("Show Autocomplete Help"), this);
+    action->setCheckable(true);
+    connect(action, SIGNAL(triggered(bool)), this, SLOT(setShowAutocompleteHelp(bool)));
+    settings->addAction( action, "editor-toggle-show-autocomplete-help", editorCategory);
 
     mActions[IndentWithSpaces] = action = new QAction(tr("Use Spaces for Indentation"), this);
     action->setCheckable(true);
@@ -600,6 +701,7 @@ void MultiEditor::createActions()
     addAction(mActions[CopyLineDown]);
     addAction(mActions[MoveLineUp]);
     addAction(mActions[MoveLineDown]);
+    addAction(mActions[DeleteWord]);
     addAction(mActions[GotoPreviousBlock]);
     addAction(mActions[GotoNextBlock]);
     addAction(mActions[SelectEnclosingBlock]);
@@ -626,6 +728,7 @@ void MultiEditor::updateActions()
     mActions[CopyLineDown]->setEnabled( editor );
     mActions[MoveLineUp]->setEnabled( editor );
     mActions[MoveLineDown]->setEnabled( editor );
+    mActions[DeleteWord]->setEnabled( editor );
     mActions[GotoPreviousEmptyLine]->setEnabled( editor );
     mActions[GotoNextEmptyLine]->setEnabled( editor );
     mActions[DocClose]->setEnabled( editor );
@@ -655,8 +758,10 @@ void MultiEditor::applySettings( Settings::Manager * settings )
 {
     bool show_whitespace = settings->value("IDE/editor/showWhitespace").toBool();
     bool show_linenumber = settings->value("IDE/editor/showLinenumber").toBool();
+    bool show_autocompletehelp = settings->value("IDE/editor/showAutocompleteHelp").toBool();
     mActions[ShowWhitespace]->setChecked( show_whitespace );
     mActions[ShowLinenumber]->setChecked( show_linenumber );
+    mActions[ShowAutocompleteHelp]->setChecked(show_autocompletehelp);
 }
 
 static QVariantList saveBoxState( CodeEditorBox *box, const QList<Document*> & documentList )
@@ -717,8 +822,10 @@ void MultiEditor::saveSession( Session *session )
     int tabCount = mTabs->count();
     for (int tabIdx = 0; tabIdx < tabCount; ++tabIdx) {
         Document *doc = documentForTab(tabIdx);
-        documentList << doc;
-        tabsData << doc->filePath();
+        if (doc) {
+            documentList << doc;
+            tabsData << doc->filePath();
+        }
     }
 
     session->setValue( "documents", QVariant::fromValue(tabsData) );
@@ -778,8 +885,8 @@ void MultiEditor::switchSession( Session *session )
 
     // close all docs
     foreach (Document *doc, documentList)
-        docManager->close(doc);
-
+    docManager->close(doc);
+    
     // remove all tabs
     while (mTabs->count())
         mTabs->removeTab(0);
@@ -799,7 +906,7 @@ void MultiEditor::switchSession( Session *session )
         QVariantList docDataList = session->value("documents").value<QVariantList>();
         foreach( const QVariant & docData, docDataList ) {
             QString filePath = docData.toString();
-            Document * doc = docManager->open(filePath, -1, 0, false);
+            Document * doc = docManager->open(filePath, -1, 0, true);
             documentList << doc;
         }
 
@@ -934,7 +1041,7 @@ void MultiEditor::onDocModified( QObject *object )
     if(isModified)
         icon = mDocModifiedIcon;
 
-    Main::evaluateCodeIfCompiled(QString("Document.findByQUuid(\'%1\').prSetEdited(%2)").arg(doc->id().constData()).arg(isModified), true);
+    Main::evaluateCodeIfCompiled(QStringLiteral("Document.findByQUuid(\'%1\').prSetEdited(%2)").arg(doc->id().constData()).arg(isModified), true);
     
     mTabs->setTabIcon( tabIdx, icon );
 }
@@ -990,7 +1097,11 @@ void MultiEditor::onBoxActivated(CodeEditorBox *box)
 
 Document * MultiEditor::documentForTab( int index )
 {
-    return mTabs->tabData(index).value<Document*>();
+    QVariant doc = mTabs->tabData(index);
+    if (doc.isValid() && !doc.isNull())
+        return doc.value<Document*>();
+    else
+        return NULL;
 }
 
 int MultiEditor::tabForDocument( Document * doc )
@@ -1106,6 +1217,11 @@ void MultiEditor::setShowLinenumber(bool showLinenumber)
 {
     Main::settings()->setValue("IDE/editor/showLinenumber", showLinenumber);
     Main::instance()->applySettings();
+}
+
+void MultiEditor::setShowAutocompleteHelp(bool showAutocompleteHelp)
+{
+    Main::settings()->setValue("IDE/editor/showAutocompleteHelp", showAutocompleteHelp);
 }
 
 } // namespace ScIDE

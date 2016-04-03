@@ -25,6 +25,8 @@
 #include <cstdio>
 #include "function_attributes.h"
 
+#include <boost/align/is_aligned.hpp>
+
 static InterfaceTable *ft;
 
 struct Vibrato : public Unit
@@ -32,6 +34,7 @@ struct Vibrato : public Unit
 	double mPhase, m_attackSlope, m_attackLevel;
 	float mFreqMul, m_scaleA, m_scaleB, mFreq;
 	int m_delay, m_attack;
+    float trig;
 };
 
 struct LFPulse : public Unit
@@ -322,6 +325,28 @@ void Vibrato_next(Vibrato *unit, int inNumSamples)
 {
 	float *out = ZOUT(0);
 	float *in = ZIN(0);
+	
+	float curtrig = ZIN0(8);
+	if (unit->trig <= 0.f && curtrig > 0.f){
+	
+		unit->mFreqMul = 4.0 * SAMPLEDUR;
+		unit->mPhase = 4.0 * sc_wrap(ZIN0(7), 0.f, 1.f) - 1.0;
+	
+		RGen& rgen = *unit->mParent->mRGen;
+		float rate = ZIN0(1) * unit->mFreqMul;
+		float depth = ZIN0(2);
+		float rateVariation = ZIN0(5);
+		float depthVariation = ZIN0(6);
+		unit->mFreq    = rate  * (1.f + rateVariation  * rgen.frand2());
+		unit->m_scaleA = depth * (1.f + depthVariation * rgen.frand2());
+		unit->m_scaleB = depth * (1.f + depthVariation * rgen.frand2());
+		unit->m_delay = (int)(ZIN0(3) * SAMPLERATE);
+		unit->m_attack = (int)(ZIN0(4) * SAMPLERATE);
+		unit->m_attackSlope = 1. / (double)(1 + unit->m_attack);
+		unit->m_attackLevel = unit->m_attackSlope;
+	}
+	
+	unit->trig = curtrig;
 
 	double ffreq = unit->mFreq;
 	double phase = unit->mPhase;
@@ -440,7 +465,7 @@ void Vibrato_Ctor(Vibrato* unit)
 	unit->m_attack = (int)(ZIN0(4) * SAMPLERATE);
 	unit->m_attackSlope = 1. / (double)(1 + unit->m_attack);
 	unit->m_attackLevel = unit->m_attackSlope;
-
+	unit->trig = 0.0f;
 	SETCALC(Vibrato_next);
 	Vibrato_next(unit, 1);
 }
@@ -463,7 +488,7 @@ void LFPulse_next_a(LFPulse *unit, int inNumSamples)
 			phase -= 1.f;
 			duty = unit->mDuty = nextDuty;
 			// output at least one sample from the opposite polarity
-			z = duty < 0.5f ? 1.f : 0.f;
+			z = duty <= 0.5f ? 1.f : 0.f;
 		} else {
 			z = phase < duty ? 1.f : 0.f;
 		}
@@ -488,7 +513,7 @@ void LFPulse_next_k(LFPulse *unit, int inNumSamples)
 			phase -= 1.f;
 			duty = unit->mDuty = nextDuty;
 			// output at least one sample from the opposite polarity
-			z = duty < 0.5f ? 1.f : 0.f;
+			z = duty <= 0.5f ? 1.f : 0.f;
 		} else {
 			z = phase < duty ? 1.f : 0.f;
 		}
@@ -866,7 +891,6 @@ void LFGauss_Ctor(LFGauss* unit)
 				SETCALC(LFGauss_next_aa);
 		} else {
 				SETCALC(LFGauss_next_a);
-				printf("LFGauss_next_a\n");
 		}
 	} else {
 		SETCALC(LFGauss_next_k);
@@ -1246,8 +1270,6 @@ struct K2A:
 	}
 };
 
-DEFINE_XTORS(K2A)
-
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 void A2K_next(A2K *unit, int inNumSamples)
@@ -1331,7 +1353,7 @@ void T2A_Ctor(T2A* unit)
 #ifdef NOVA_SIMD
 	if (BUFLENGTH == 64)
 		SETCALC(T2A_next_nova_64);
-	else if (!(BUFLENGTH & 15))
+	else if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 		SETCALC(T2A_next_nova);
 	else
 #endif
@@ -1366,8 +1388,6 @@ struct DC:
 			set_vec<type>(out(0), value, inNumSamples);
 	}
 };
-
-DEFINE_XTORS(DC)
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1469,7 +1489,7 @@ void Line_Ctor(Line* unit)
 #ifdef NOVA_SIMD
 	if (BUFLENGTH == 64)
 		SETCALC(Line_next_nova);
-	else if (!(BUFLENGTH & 15))
+	else if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 		SETCALC(Line_next_nova);
 	else
 #endif
@@ -1586,7 +1606,7 @@ void XLine_Ctor(XLine* unit)
 #ifdef NOVA_SIMD
 	if (BUFLENGTH == 64)
 		SETCALC(XLine_next_nova_64);
-	else if (!(BUFLENGTH & 15))
+	else if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 		SETCALC(XLine_next_nova);
 	else
 #endif
@@ -1994,6 +2014,7 @@ void Clip_next_nova_ki(Clip* unit, int inNumSamples)
 
 	float lo_slope = CALCSLOPE(next_lo, lo);
 	nova::clip_vec_simd(OUT(0), IN(0), slope_argument(lo, lo_slope), hi, inNumSamples);
+	unit->m_lo = next_lo;
 }
 
 void Clip_next_nova_ik(Clip* unit, int inNumSamples)
@@ -2009,6 +2030,7 @@ void Clip_next_nova_ik(Clip* unit, int inNumSamples)
 
 	float hi_slope = CALCSLOPE(next_hi, hi);
 	nova::clip_vec_simd(OUT(0), IN(0), lo, slope_argument(hi, hi_slope), inNumSamples);
+	unit->m_hi = next_hi;
 }
 
 void Clip_next_nova_kk(Clip* unit, int inNumSamples)
@@ -2037,6 +2059,8 @@ void Clip_next_nova_kk(Clip* unit, int inNumSamples)
 	float hi_slope = CALCSLOPE(next_hi, hi);
 
 	nova::clip_vec_simd(OUT(0), IN(0), slope_argument(lo, lo_slope), slope_argument(hi, hi_slope), inNumSamples);
+	unit->m_lo = next_lo;
+	unit->m_hi = next_hi;
 }
 
 void Clip_next_nova_ai(Clip* unit, int inNumSamples)
@@ -2058,6 +2082,7 @@ void Clip_next_nova_ak(Clip* unit, int inNumSamples)
 	float hi_slope = CALCSLOPE(next_hi, hi);
 
 	nova::clip_vec_simd(OUT(0), IN(0), IN(1), slope_argument(hi, hi_slope), inNumSamples);
+	unit->m_hi = next_hi;
 }
 
 void Clip_next_nova_ia(Clip* unit, int inNumSamples)
@@ -2078,6 +2103,7 @@ void Clip_next_nova_ka(Clip* unit, int inNumSamples)
 
 	float lo_slope = CALCSLOPE(next_lo, lo);
 	nova::clip_vec_simd(OUT(0), IN(0), slope_argument(lo, lo_slope), IN(2), inNumSamples);
+	unit->m_lo = next_lo;
 }
 
 
@@ -2099,7 +2125,7 @@ static ClipCalcFunc Clip_SelectCalc(Clip * unit)
 	int hiRate = INRATE(2);
 
 #ifdef NOVA_SIMD
-	if (!(BUFLENGTH & 15)) {
+	if (boost::alignment::is_aligned( BUFLENGTH, 16 )) {
 		switch (loRate)
 		{
 		case calc_FullRate:
@@ -2703,6 +2729,8 @@ enum {
 void EnvGen_next_ak_nova(EnvGen *unit, int inNumSamples);
 #endif
 
+#define ENVGEN_NOT_STARTED 1000000000
+
 void EnvGen_Ctor(EnvGen *unit)
 {
 	//Print("EnvGen_Ctor A\n");
@@ -2711,7 +2739,7 @@ void EnvGen_Ctor(EnvGen *unit)
 			SETCALC(EnvGen_next_aa);
 		} else {
 #ifdef NOVA_SIMD
-			if (!(BUFLENGTH & 15))
+			if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 				SETCALC(EnvGen_next_ak_nova);
 			else
 #endif
@@ -2727,7 +2755,8 @@ void EnvGen_Ctor(EnvGen *unit)
 
 	unit->m_endLevel = unit->m_level = ZIN0(kEnvGen_initLevel) * ZIN0(kEnvGen_levelScale) + ZIN0(kEnvGen_levelBias);
 	unit->m_counter = 0;
-	unit->m_stage = 1000000000;
+	unit->m_stage = ENVGEN_NOT_STARTED;
+	unit->m_shape = shape_Hold;
 	unit->m_prevGate = 0.f;
 	unit->m_released = false;
 	unit->m_releaseNode = (int)ZIN0(kEnvGen_releaseNode);
@@ -2740,7 +2769,7 @@ void EnvGen_Ctor(EnvGen *unit)
 	EnvGen_next_k(unit, 1);
 }
 
-static inline bool check_gate(EnvGen * unit, float prevGate, float gate, int & counter, double level, int counterOffset = 0)
+static bool check_gate(EnvGen * unit, float prevGate, float gate, int & counter, double level, int counterOffset = 0)
 {
 	if (prevGate <= 0.f && gate > 0.f) {
 		unit->m_stage = -1;
@@ -2786,6 +2815,8 @@ static inline bool check_gate_ar(EnvGen * unit, int i, float & prevGate, float *
 
 static inline bool EnvGen_nextSegment(EnvGen * unit, int & counter, double & level)
 {
+    //if (unit->m_stage == ENVGEN_NOT_STARTED) { return true; } // this fixes doneAction 14, but breaks with EnvGen_next_aa
+
 	//Print("stage %d rel %d\n", unit->m_stage, (int)ZIN0(kEnvGen_releaseNode));
 	int numstages = (int)ZIN0(kEnvGen_numStages);
 
@@ -2825,6 +2856,7 @@ initSegment:
 			return false;
 		}
 
+		float previousEndLevel = unit->m_endLevel;
 		float** envPtr  = unit->mInBuf + stageOffset;
 		double endLevel = *envPtr[0] * ZIN0(kEnvGen_levelScale) + ZIN0(kEnvGen_levelBias); // scale levels
 		double dur      = *envPtr[1] * ZIN0(kEnvGen_timeScale);
@@ -2844,8 +2876,7 @@ initSegment:
 			level = endLevel;
 		} break;
 		case shape_Hold : {
-			level = unit->m_y1;
-			unit->m_y1 = endLevel;
+			level = previousEndLevel;
 		} break;
 		case shape_Linear : {
 			unit->m_grow = (endLevel - level) / counter;
@@ -2896,8 +2927,8 @@ initSegment:
 			unit->m_grow = (unit->m_y2 - unit->m_y1) / counter;
 		} break;
 		case shape_Cubed : {
-			unit->m_y1 = pow(level, 0.33333333);
-			unit->m_y2 = pow(endLevel, 0.33333333);
+			unit->m_y1 = pow(level, 1.0/3.0);//0.33333333);
+			unit->m_y2 = pow(endLevel, 1.0/3.0);
 			unit->m_grow = (unit->m_y2 - unit->m_y1) / counter;
 		} break;
 		}
@@ -3004,6 +3035,7 @@ static inline void EnvGen_perform(EnvGen * unit, float *& out, double & level, i
 				break;
 			ZXP(out) = level;
 			y1 += grow;
+            y1 = sc_max(y1,0);
 			level = y1*y1*y1;
 		}
 		unit->m_y1 = y1;
@@ -3186,6 +3218,7 @@ void Linen_Ctor(Linen *unit)
 	unit->m_level = 0.f;
 	unit->m_stage = 4;
 	unit->m_prevGate = 0.f;
+	if(ZIN0(0) <= -1.f) { unit->m_stage = 1; } // early release
 	Linen_next_k(unit, 1);
 }
 
@@ -3660,11 +3693,11 @@ PluginLoad(LF)
 	DefineSimpleUnit(Impulse);
 	DefineSimpleUnit(VarSaw);
 	DefineSimpleUnit(SyncSaw);
-	DefineSimpleUnit(K2A);
+	registerUnit<K2A>( ft, "K2A" );
 	DefineSimpleUnit(A2K);
 	DefineSimpleUnit(T2K);
 	DefineSimpleUnit(T2A);
-	DefineSimpleUnit(DC);
+	registerUnit<DC>( ft, "DC" );
 	DefineSimpleUnit(Line);
 	DefineSimpleUnit(XLine);
 

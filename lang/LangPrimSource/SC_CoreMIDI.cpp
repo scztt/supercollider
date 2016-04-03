@@ -255,7 +255,8 @@ static void midiProcessPacket(MIDIPacket *pkt, size_t uid)
 				case 0x90 : //noteOn
 					++g->sp; SetInt(g->sp, pkt->data[i+1]); //val1
 					++g->sp; SetInt(g->sp, pkt->data[i+2]); //val2
-					runInterpreter(g, pkt->data[i+2] ? s_midiNoteOnAction : s_midiNoteOffAction, 5);
+// 					runInterpreter(g, pkt->data[i+2] ? s_midiNoteOnAction : s_midiNoteOffAction, 5);
+					runInterpreter(g, s_midiNoteOnAction, 5);
 					i += 3;
 					break;
 				case 0xA0 : //polytouch
@@ -321,21 +322,24 @@ int midiCleanUp();
 
 int initMIDI(int numIn, int numOut)
 {
+	OSStatus err;
+	CFAllocatorRef alloc = CFAllocatorGetDefault();
+	int enc = kCFStringEncodingMacRoman;
+
 	midiCleanUp();
 	numIn = sc_clip(numIn, 1, kMaxMidiPorts);
 	numOut = sc_clip(numOut, 1, kMaxMidiPorts);
 
-	int enc = kCFStringEncodingMacRoman;
-	CFAllocatorRef alloc = CFAllocatorGetDefault();
+	if (!gMIDIClient) {
+		CFStringRef clientName = CFStringCreateWithCString(alloc, "SuperCollider", enc);
 
-	CFStringRef clientName = CFStringCreateWithCString(alloc, "SuperCollider", enc);
-
-	OSStatus err = MIDIClientCreate(clientName, midiNotifyProc, nil, &gMIDIClient);
-	if (err) {
-		post("Could not create MIDI client. error %d\n", err);
-		return errFailed;
+		err = MIDIClientCreate(clientName, midiNotifyProc, nil, &gMIDIClient);
+		if (err) {
+			post("Could not create MIDI client. error: ");
+			return errFailed;
+		}
+		CFRelease(clientName);
 	}
-	CFRelease(clientName);
 
 	for (int i=0; i<numIn; ++i) {
 		char str[32];
@@ -398,13 +402,14 @@ int midiCleanUp()
 	}
 	gNumMIDIInPorts = 0;
 
-	if (gMIDIClient) {
-		if( MIDIClientDispose(gMIDIClient) ) {
-			post( "Error: failed to dispose MIDIClient\n" );
-			return errFailed;
-		}
-		gMIDIClient = 0;
-	}
+// Disposing and immediately re-initializing an identical midi client can cause crashes. Don't dispose - instead, reuse the one we've created already.
+//	if (gMIDIClient) {
+//		if( MIDIClientDispose(gMIDIClient) ) {
+//			post( "Error: failed to dispose MIDIClient\n" );
+//			return errFailed;
+//		}
+//		gMIDIClient = 0;
+//	}
 	return errNone;
 }
 
@@ -428,27 +433,27 @@ int prListMIDIEndpoints(struct VMGlobals *g, int numArgsPushed)
 
 	PyrObject* idarraySo = newPyrArray(g->gc, numSrc * sizeof(SInt32), 0 , true);
 		SetObject(idarray->slots+idarray->size++, idarraySo);
-		g->gc->GCWrite(idarray, idarraySo);
+		g->gc->GCWriteNew(idarray, idarraySo); // we know idarraySo is white so we can use GCWriteNew
 
 	PyrObject* devarraySo = newPyrArray(g->gc, numSrc * sizeof(PyrObject), 0 , true);
 		SetObject(idarray->slots+idarray->size++, devarraySo);
-		g->gc->GCWrite(idarray, devarraySo);
+		g->gc->GCWriteNew(idarray, devarraySo); // we know devarraySo is white so we can use GCWriteNew
 
 		PyrObject* namearraySo = newPyrArray(g->gc, numSrc * sizeof(PyrObject), 0 , true);
 		SetObject(idarray->slots+idarray->size++, namearraySo);
-		g->gc->GCWrite(idarray, namearraySo);
+		g->gc->GCWriteNew(idarray, namearraySo); // we know namearraySo is white so we can use GCWriteNew
 
 	PyrObject* idarrayDe = newPyrArray(g->gc, numDst * sizeof(SInt32), 0 , true);
 		SetObject(idarray->slots+idarray->size++, idarrayDe);
-		g->gc->GCWrite(idarray, idarrayDe);
+		g->gc->GCWriteNew(idarray, idarrayDe); // we know idarrayDe is white so we can use GCWriteNew
 
 	PyrObject* namearrayDe = newPyrArray(g->gc, numDst * sizeof(PyrObject), 0 , true);
 		SetObject(idarray->slots+idarray->size++, namearrayDe);
-		g->gc->GCWrite(idarray, namearrayDe);
+		g->gc->GCWriteNew(idarray, namearrayDe); // we know namearrayDe is white so we can use GCWriteNew
 
 	PyrObject* devarrayDe = newPyrArray(g->gc, numDst * sizeof(PyrObject), 0 , true);
 		SetObject(idarray->slots+idarray->size++, devarrayDe);
-		g->gc->GCWrite(idarray, devarrayDe);
+		g->gc->GCWriteNew(idarray, devarrayDe); // we know devarrayDe is white so we can use GCWriteNew
 
 
 	for (int i=0; i<numSrc; ++i) {
@@ -467,8 +472,8 @@ int prListMIDIEndpoints(struct VMGlobals *g, int numArgsPushed)
 		{
 			MIDIObjectGetStringProperty(src, kMIDIPropertyName, &devname);
 			MIDIObjectGetStringProperty(src, kMIDIPropertyName, &endname);
-			CFStringGetCString(devname, cdevname, 1024, kCFStringEncodingUTF8);
-			CFStringGetCString(endname, cendname, 1024, kCFStringEncodingUTF8);
+			if (devname) CFStringGetCString(devname, cdevname, 1024, kCFStringEncodingUTF8);
+			if (endname) CFStringGetCString(endname, cendname, 1024, kCFStringEncodingUTF8);
 		}
 		else
 		{
@@ -477,25 +482,25 @@ int prListMIDIEndpoints(struct VMGlobals *g, int numArgsPushed)
 			MIDIEntityGetDevice(ent, &dev);
 			MIDIObjectGetStringProperty(dev, kMIDIPropertyName, &devname);
 			MIDIObjectGetStringProperty(src, kMIDIPropertyName, &endname);
-			CFStringGetCString(devname, cdevname, 1024, kCFStringEncodingUTF8);
-			CFStringGetCString(endname, cendname, 1024, kCFStringEncodingUTF8);
+			if (devname) CFStringGetCString(devname, cdevname, 1024, kCFStringEncodingUTF8);
+			if (endname) CFStringGetCString(endname, cendname, 1024, kCFStringEncodingUTF8);
 		}
 
 		PyrString *string = newPyrString(g->gc, cendname, 0, true);
 		SetObject(namearraySo->slots+i, string);
 		namearraySo->size++;
-		g->gc->GCWrite(namearraySo, (PyrObject*)string);
+		g->gc->GCWriteNew(namearraySo, (PyrObject*)string); // we know string is white so we can use GCWriteNew
 
 		PyrString *devstring = newPyrString(g->gc, cdevname, 0, true);
 		SetObject(devarraySo->slots+i, devstring);
 		devarraySo->size++;
-		g->gc->GCWrite(devarraySo, (PyrObject*)devstring);
+		g->gc->GCWriteNew(devarraySo, (PyrObject*)devstring); // we know devString is white so we can use GCWriteNew
 
 		SetInt(idarraySo->slots+i, id);
 		idarraySo->size++;
 
-		CFRelease(devname);
-		CFRelease(endname);
+		if (devname) CFRelease(devname);
+		if (endname) CFRelease(endname);
 	}
 
 
@@ -517,8 +522,8 @@ int prListMIDIEndpoints(struct VMGlobals *g, int numArgsPushed)
 		{
 			MIDIObjectGetStringProperty(dst, kMIDIPropertyName, &devname);
 			MIDIObjectGetStringProperty(dst, kMIDIPropertyName, &endname);
-			CFStringGetCString(devname, cdevname, 1024, kCFStringEncodingUTF8);
-			CFStringGetCString(endname, cendname, 1024, kCFStringEncodingUTF8);
+			if (devname) CFStringGetCString(devname, cdevname, 1024, kCFStringEncodingUTF8);
+			if (endname) CFStringGetCString(endname, cendname, 1024, kCFStringEncodingUTF8);
 
 		}
 		else
@@ -528,23 +533,23 @@ int prListMIDIEndpoints(struct VMGlobals *g, int numArgsPushed)
 			MIDIEntityGetDevice(ent, &dev);
 			MIDIObjectGetStringProperty(dev, kMIDIPropertyName, &devname);
 			MIDIObjectGetStringProperty(dst, kMIDIPropertyName, &endname);
-			CFStringGetCString(devname, cdevname, 1024, kCFStringEncodingUTF8);
-			CFStringGetCString(endname, cendname, 1024, kCFStringEncodingUTF8);
+			if (devname) CFStringGetCString(devname, cdevname, 1024, kCFStringEncodingUTF8);
+			if (endname) CFStringGetCString(endname, cendname, 1024, kCFStringEncodingUTF8);
 		}
 
 		PyrString *string = newPyrString(g->gc, cendname, 0, true);
 		SetObject(namearrayDe->slots+namearrayDe->size++, string);
-		g->gc->GCWrite(namearrayDe, (PyrObject*)string);
+		g->gc->GCWriteNew(namearrayDe, (PyrObject*)string); // we know string is white so we can use GCWriteNew
 
 		PyrString *devstring = newPyrString(g->gc, cdevname, 0, true);
 
 		SetObject(devarrayDe->slots+devarrayDe->size++, devstring);
-		g->gc->GCWrite(devarrayDe, (PyrObject*)devstring);
+		g->gc->GCWriteNew(devarrayDe, (PyrObject*)devstring); // we know devstring is white so we can use GCWriteNew
 
 		SetInt(idarrayDe->slots+idarrayDe->size++, id);
 
-		CFRelease(devname);
-		CFRelease(endname);
+		if (devname) CFRelease(devname);
+		if (endname) CFRelease(endname);
 
 	}
 	return errNone;
@@ -570,7 +575,7 @@ int prConnectMIDIIn(struct VMGlobals *g, int numArgsPushed)
 
 	MIDIEndpointRef src=0;
 	MIDIObjectType mtype;
-	MIDIObjectFindByUniqueID(uid, (MIDIObjectRef*)&src, &mtype);
+	MIDIObjectFindByUniqueID(uid, &src, &mtype);
 	if (mtype != kMIDIObjectType_Source) return errFailed;
 
 	//pass the uid to the midiReadProc to identify the src
@@ -594,7 +599,7 @@ int prDisconnectMIDIIn(struct VMGlobals *g, int numArgsPushed)
 
 	MIDIEndpointRef src=0;
 	MIDIObjectType mtype;
-	MIDIObjectFindByUniqueID(uid, (MIDIObjectRef*)&src, &mtype);
+	MIDIObjectFindByUniqueID(uid, &src, &mtype);
 	if (mtype != kMIDIObjectType_Source) return errFailed;
 
 	MIDIPortDisconnectSource(gMIDIInPort[inputIndex], src);

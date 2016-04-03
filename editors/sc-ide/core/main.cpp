@@ -27,6 +27,7 @@
 #include "../widgets/lookup_dialog.hpp"
 #include "../widgets/code_editor/highlighter.hpp"
 #include "../widgets/style/style.hpp"
+#include "../../../QtCollider/hacks/hacks_mac.hpp"
 
 #include "yaml-cpp/node.h"
 #include "yaml-cpp/parser.h"
@@ -118,6 +119,8 @@ int main( int argc, char *argv[] )
         main->documentManager()->open(argument);
     }
 
+    win->restoreDocuments();
+
     bool startInterpreter = settings->value("IDE/interpreter/autoStart").toBool();
     if (startInterpreter)
         main->scProcess()->startLanguage();
@@ -131,7 +134,7 @@ bool SingleInstanceGuard::tryConnect(QStringList const & arguments)
     const int maxNumberOfInstances = 128;
     if (!arguments.empty()) {
         for (int socketID = 0; socketID != maxNumberOfInstances; ++socketID) {
-            QString serverName = QString("SuperColliderIDE_Singleton_%1").arg(socketID);
+            QString serverName = QStringLiteral("SuperColliderIDE_Singleton_%1").arg(socketID);
             QSharedPointer<QLocalSocket> socket (new QLocalSocket(this));
             socket->connectToServer(serverName);
 
@@ -145,7 +148,7 @@ bool SingleInstanceGuard::tryConnect(QStringList const & arguments)
                 QDataStream stream(socket.data());
                 stream.setVersion(QDataStream::Qt_4_6);
 
-                stream << QString("open");
+                stream << QStringLiteral("open");
                 stream << canonicalArguments;
                 if (!socket->waitForBytesWritten(300))
                     qWarning("SingleInstanceGuard: writing data to another IDE instance timed out");
@@ -157,7 +160,7 @@ bool SingleInstanceGuard::tryConnect(QStringList const & arguments)
 
     mIpcServer = new QLocalServer(this);
     for (int socketID = 0; socketID != maxNumberOfInstances; ++socketID) {
-        QString serverName = QString("SuperColliderIDE_Singleton_%1").arg(socketID);
+        QString serverName = QStringLiteral("SuperColliderIDE_Singleton_%1").arg(socketID);
 
         bool listening = mIpcServer->listen(serverName);
         if (listening) {
@@ -187,7 +190,7 @@ void SingleInstanceGuard::onIpcData()
     if ( in.status() != QDataStream::Ok )
         return;
 
-    if (id == QString("open")) {
+    if (id == QStringLiteral("open")) {
         foreach (QString path, message)
             Main::documentManager()->open(path);
     }
@@ -215,11 +218,13 @@ Main::Main(void) :
             mDocManager, SLOT(handleScLangMessage(QString,QString)));
 
     qApp->installEventFilter(this);
+    qApp->installNativeEventFilter(this);
 }
 
 void Main::quit() {
     mSessionManager->saveSession();
     storeSettings();
+    mScProcess->stopLanguage();
     QApplication::quit();
 }
 
@@ -244,6 +249,28 @@ bool Main::eventFilter(QObject *object, QEvent *event)
 
     return QObject::eventFilter(object, event);
 }
+
+bool Main::nativeEventFilter(const QByteArray &, void * message, long *)
+{
+    bool result = false;
+
+#ifdef Q_OS_MAC
+    if (QtCollider::Mac::IsCmdPeriodKeyDown(reinterpret_cast<void *>(message)))
+    {
+//        QKeyEvent event(QEvent::KeyPress, Qt::Key_Period, Qt::ControlModifier, ".");
+//        QApplication::sendEvent(this, &event);
+        mScProcess->stopMain(); // we completely bypass the shortcut handling
+        result = true;
+    }
+    else if (QtCollider::Mac::IsCmdPeriodKeyUp(reinterpret_cast<void *>(message)))
+    {
+        result = true;
+    }
+#endif 
+  
+    return result;
+}
+
 
 bool Main::openDocumentation(const QString & string)
 {

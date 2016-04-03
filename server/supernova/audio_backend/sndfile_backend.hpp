@@ -27,12 +27,13 @@
 #include <thread>
 #include <vector>
 
+#include <boost/align/aligned_allocator.hpp>
 #include <boost/lockfree/spsc_queue.hpp>
+#include <boost/sync/semaphore.hpp>
 
 #include <sndfile.hh>
 
 #include "nova-tt/name_thread.hpp"
-#include "nova-tt/semaphore.hpp"
 #include "utilities/branch_hints.hpp"
 
 #include "audio_backend_common.hpp"
@@ -60,7 +61,7 @@ class sndfile_backend:
 
 public:
     sndfile_backend(void):
-        read_frames(queue_size), write_frames(queue_size), running(false), reader_running(false), writer_running(false)
+        read_frames(queue_size), write_frames(queue_size)
     {}
 
     size_t get_audio_blocksize(void) const
@@ -101,7 +102,7 @@ public:
         if (!output_file)
             throw std::runtime_error("cannot open output file");
 
-        output_file.command(SFC_SET_CLIPPING, NULL, SF_TRUE);
+        output_file.command(SFC_SET_CLIPPING, nullptr, SF_TRUE);
 
         super::output_samples.resize(output_channel_count);
 
@@ -202,7 +203,7 @@ private:
         const size_t frames_per_tick = get_audio_blocksize();
 
         // something like autobuffer might be good
-        std::vector<sample_type, aligned_allocator<sample_type> > data_to_read(input_channels * frames_per_tick, 0.f);
+        std::vector<sample_type, boost::alignment::aligned_allocator<sample_type, 64> > data_to_read(input_channels * frames_per_tick, 0.f);
 
         for (;;) {
             if (unlikely(reader_running.load(std::memory_order_acquire) == false))
@@ -337,8 +338,8 @@ private:
 
     std::thread reader_thread, writer_thread;
     boost::lockfree::spsc_queue< sample_type > read_frames, write_frames;
-    nova::semaphore read_semaphore, write_semaphore;
-    std::atomic<bool> running, reader_running, writer_running;
+    boost::sync::semaphore read_semaphore, write_semaphore;
+    std::atomic<bool> running = {false}, reader_running = {false}, writer_running = {false};
     std::vector<sample_type> max_peaks;
 };
 

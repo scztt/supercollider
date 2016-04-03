@@ -40,6 +40,9 @@ using nova::slope_argument;
 
 #endif
 
+#include <boost/align/is_aligned.hpp>
+
+
 static InterfaceTable *ft;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -279,10 +282,7 @@ void TrigControl_next_k(Unit *unit, int inNumSamples)
 	Graph *parent = unit->mParent;
 	float **mapin = parent->mMapControls + specialIndex;
 	float *control = parent->mControls + specialIndex;
-	World *world = unit->mWorld;
-	float *buses = world->mControlBus;
-	int32 *touched = world->mControlBusTouched;
-	int bufCount = world->mBufCounter;
+	float *buses = unit->mWorld->mControlBus;
 	for (uint32 i=0; i<numChannels; ++i, mapin++, control++) {
 		float *out = OUT(i);
 		// requires a bit of detective work to see what it has been mapped to.
@@ -292,11 +292,7 @@ void TrigControl_next_k(Unit *unit, int inNumSamples)
 		} else {
 			// global control bus. look at time stamp.
 			int busindex = *mapin - buses;
-			if (touched[busindex] == bufCount) {
-				*out = buses[busindex];
-			} else {
-				*out = 0.f;
-			}
+			*out = buses[busindex];
 		}
 		// must zero the control even if mapped - otherwise it triggers on unmap
 		*control = 0.f;
@@ -315,14 +311,7 @@ void TrigControl_next_1(Unit *unit, int inNumSamples)
 		// read local control.
 		*out = *control;
 	} else {
-		// global control bus. look at time stamp.
-		World *world = unit->mWorld;
-		int busindex = *mapin - world->mControlBus;
-		if (world->mControlBusTouched[busindex] == world->mBufCounter) {
-			*out = **mapin;
-		} else {
-			*out = 0.f;
-		}
+		*out = **mapin;
 	}
 	// must zero the control even if mapped - otherwise it triggers on unmap
 	*control = 0.f;
@@ -602,7 +591,7 @@ void In_Ctor(IOUnit* unit)
 #ifdef NOVA_SIMD
 		if (BUFLENGTH == 64)
 			SETCALC(In_next_a_nova_64);
-		else if (!(BUFLENGTH & 15))
+		else if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 			SETCALC(In_next_a_nova);
 		else
 #endif
@@ -866,7 +855,7 @@ void ReplaceOut_Ctor(IOUnit* unit)
 #ifdef NOVA_SIMD
 		if (BUFLENGTH == 64)
 			SETCALC(ReplaceOut_next_a_nova_64);
-		else if (!(BUFLENGTH & 15))
+		else if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 			SETCALC(ReplaceOut_next_a_nova);
 		else
 #endif
@@ -1045,7 +1034,7 @@ void Out_Ctor(IOUnit* unit)
 #if defined(NOVA_SIMD)
 		if (BUFLENGTH == 64)
 			SETCALC(Out_next_a_nova_64);
-		else if (!(BUFLENGTH & 15))
+		else if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 			SETCALC(Out_next_a_nova);
 		else
 			SETCALC(Out_next_a);
@@ -1257,7 +1246,7 @@ void XOut_Ctor(XOut* unit)
 	unit->m_xfade = ZIN0(1);
 	if (unit->mCalcRate == calc_FullRate) {
 #ifdef NOVA_SIMD
-		if (!(BUFLENGTH & 15))
+		if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 			SETCALC(XOut_next_a_nova);
 #endif
 		SETCALC(XOut_next_a);
@@ -1581,7 +1570,7 @@ void LocalIn_Ctor(LocalIn* unit)
 #ifdef NOVA_SIMD
 		if (BUFLENGTH == 64)
 			SETCALC(LocalIn_next_a_nova_64);
-		else if (!(BUFLENGTH & 15))
+		else if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 			SETCALC(LocalIn_next_a_nova);
 		else
 #endif
@@ -1730,7 +1719,6 @@ void LocalOut_next_k(IOUnit *unit, int inNumSamples)
 void LocalOut_Ctor(IOUnit* unit)
 {
 	//Print("->LocalOut_Ctor\n");
-	World *world = unit->mWorld;
 	unit->m_fbusChannel = -1.;
 
 	if (unit->mCalcRate == calc_FullRate) {
@@ -1738,7 +1726,7 @@ void LocalOut_Ctor(IOUnit* unit)
 #ifdef NOVA_SIMD
 		if (BUFLENGTH == 64)
 			SETCALC(LocalOut_next_a_nova_64);
-		else if (!(BUFLENGTH & 15))
+		else if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 			SETCALC(LocalOut_next_a_nova);
 		else
 #endif

@@ -25,6 +25,7 @@
 #include "../../core/main.hpp"
 #include "../../core/doc_manager.hpp"
 #include "../../core/settings/manager.hpp"
+#include "../../core/settings/theme.hpp"
 #include "../main_window.hpp"
 
 #include <QApplication>
@@ -94,6 +95,7 @@ GenericCodeEditor::GenericCodeEditor( Document *doc, QWidget *parent ):
 
     connect( this, SIGNAL(selectionChanged()),
              mLineIndicator, SLOT(update()) );
+    connect(this, SIGNAL(selectionChanged()), this, SLOT(updateDocLastSelection()));
     connect( this, SIGNAL(cursorPositionChanged()),
              this, SLOT(onCursorPositionChanged()) );
 
@@ -103,6 +105,7 @@ GenericCodeEditor::GenericCodeEditor( Document *doc, QWidget *parent ):
     QTextDocument *tdoc = doc->textDocument();
     QPlainTextEdit::setDocument(tdoc);
     onDocumentFontChanged();
+    doc->setLastActiveEditor(this);
 
     applySettings( Main::settings() );
 }
@@ -118,43 +121,34 @@ void GenericCodeEditor::applySettings( Settings::Manager *settings )
 
     QPalette palette;
 
-    settings->beginGroup("colors");
+    const QTextCharFormat *format = &settings->getThemeVal("text");
+    QBrush bg = format->background();
+    QBrush fg = format->foreground();
+    if (bg.style() != Qt::NoBrush)
+        palette.setBrush(QPalette::Base, bg);
+    if (fg.style() != Qt::NoBrush)
+        palette.setBrush(QPalette::Text, fg);
 
-    if (settings->contains("text")) {
-        QTextCharFormat format = settings->value("text").value<QTextCharFormat>();
-        QBrush bg = format.background();
-        QBrush fg = format.foreground();
-        if (bg.style() != Qt::NoBrush)
-            palette.setBrush(QPalette::Base, bg);
-        if (fg.style() != Qt::NoBrush)
-            palette.setBrush(QPalette::Text, fg);
-    }
+    // NOTE: the line number widget will inherit the palette from the editor
+    format = &settings->getThemeVal("lineNumbers");
+    mLineIndicator->setFont(format->font());
+    bg = format->background();
+    fg = format->foreground();
+    palette.setBrush(QPalette::Mid,
+                            bg.style() != Qt::NoBrush ? bg : palette.base());
+    palette.setBrush(QPalette::ButtonText,
+                            fg.style() != Qt::NoBrush ? fg : palette.base());
 
-    if (settings->contains("lineNumbers")) {
-        // NOTE: the line number widget will inherit the palette from the editor
-        QTextCharFormat format = settings->value("lineNumbers").value<QTextCharFormat>();
-        QBrush bg = format.background();
-        QBrush fg = format.foreground();
-        if (bg.style() != Qt::NoBrush)
-            palette.setBrush(QPalette::Mid, bg);
-        if (fg.style() != Qt::NoBrush)
-            palette.setBrush(QPalette::ButtonText, fg);
-    }
+    format = &settings->getThemeVal("selection");
+    bg = format->background();
+    fg = format->foreground();
+    if (bg.style() != Qt::NoBrush)
+        palette.setBrush(QPalette::Highlight, bg);
+    if (fg.style() != Qt::NoBrush)
+        palette.setBrush(QPalette::HighlightedText, fg);
 
-    if (settings->contains("selection")) {
-        QTextCharFormat format = settings->value("selection").value<QTextCharFormat>();
-        QBrush bg = format.background();
-        QBrush fg = format.foreground();
-        if (bg.style() != Qt::NoBrush)
-            palette.setBrush(QPalette::Highlight, bg);
-        if (fg.style() != Qt::NoBrush)
-            palette.setBrush(QPalette::HighlightedText, fg);
-    }
-
-    mCurrentLineTextFormat = settings->value("currentLine").value<QTextCharFormat>();
-    mSearchResultTextFormat = settings->value("searchResult").value<QTextCharFormat>();
-
-    settings->endGroup(); // colors
+    mCurrentLineTextFormat = settings->getThemeVal("currentLine");
+    mSearchResultTextFormat = settings->getThemeVal("searchResult");
 
     mHighlightCurrentLine = settings->value("highlightCurrentLine").toBool();
     updateCurrentLineHighlighting();
@@ -466,15 +460,13 @@ void GenericCodeEditor::showPosition( int pos, int selectionLength )
 
 QString GenericCodeEditor::symbolUnderCursor()
 {
-    QTextCursor cursor = textCursor();
+    const QTextCursor cursor = textCursor();
     if (cursor.hasSelection())
         return cursor.selectedText();
-    else
-    {
-        QString blockString = cursor.block().text();
-        int position = cursor.positionInBlock();
-        return wordInStringAt( position, blockString );
-    }
+
+    const QString blockString = cursor.block().text();
+    const int position = cursor.positionInBlock();
+    return tokenInStringAt( position, blockString );
 }
 
 bool GenericCodeEditor::event( QEvent * event )
@@ -499,97 +491,137 @@ bool GenericCodeEditor::event( QEvent * event )
     return QPlainTextEdit::event(event);
 }
 
-void GenericCodeEditor::keyPressEvent(QKeyEvent * e)
+void GenericCodeEditor::keyPressEvent(QKeyEvent * event)
 {
-    hideMouseCursor(e);
+    hideMouseCursor(event);
 
     QTextCursor cursor( textCursor() );
 
     bool updateCursor = false;
 
-    if (e == QKeySequence::InsertLineSeparator) {
+    if (event == QKeySequence::InsertLineSeparator) {
         // override to avoid entering a "soft" new line
         cursor.insertBlock();
         updateCursor = true;
     } else {
-        switch (e->key()) {
+        switch (event->key()) {
+        case Qt::Key_BraceRight:
+        case Qt::Key_BracketRight:
+        case Qt::Key_ParenRight:
+            handleKeyRightParentheses( event, cursor );
+            break;
 
         case Qt::Key_Delete:
-            if (e->modifiers() & Qt::META) {
-                cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
-                cursor.removeSelectedText();
-            } else
-                QPlainTextEdit::keyPressEvent(e);
+            handleKeyDelete( event, cursor );
             break;
 
         case Qt::Key_Backspace:
-            if (e->modifiers() & Qt::META) {
-                cursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::KeepAnchor);
-                cursor.removeSelectedText();
-            } else {
-                if ( !overwriteMode()
-                     || (cursor.positionInBlock() == 0)
-                     || cursor.hasSelection() ) {
-                    QPlainTextEdit::keyPressEvent(e);
-                } else {
-                    // in overwrite mode, backspace should insert a space
-                    cursor.movePosition(QTextCursor::PreviousCharacter, QTextCursor::KeepAnchor);
-                    QString selectedText = cursor.selectedText();
-                    if (selectedText == QString(" ") ||
-                        selectedText == QString("\t") ) {
-                        cursor.clearSelection();
-                    } else {
-                        cursor.insertText(QString(QChar(' ')));
-                        cursor.movePosition(QTextCursor::PreviousCharacter);
-                    }
-                }
-                updateCursor = true;
-            }
+            handleKeyBackspace( event, cursor, updateCursor );
             break;
 
         case Qt::Key_Down:
-        {
-            if (cursor.block() == textDocument()->lastBlock()) {
-                QTextCursor::MoveMode moveMode = e->modifiers() & Qt::SHIFT ? QTextCursor::KeepAnchor
-                                                                            : QTextCursor::MoveAnchor;
-
-                cursor.movePosition(QTextCursor::EndOfBlock, moveMode);
-                setTextCursor(cursor);
-            } else
-                QPlainTextEdit::keyPressEvent(e);
+            handleKeyDown( event, cursor );
             break;
-        }
 
         case Qt::Key_Up:
-        {
-            if (cursor.block() == textDocument()->firstBlock()) {
-                QTextCursor::MoveMode moveMode = e->modifiers() & Qt::SHIFT ? QTextCursor::KeepAnchor
-                                                                            : QTextCursor::MoveAnchor;
-
-                cursor.movePosition(QTextCursor::StartOfBlock, moveMode);
-                setTextCursor(cursor);
-            } else
-                QPlainTextEdit::keyPressEvent(e);
+            handleKeyUp( event, cursor );
             break;
-        }
 
         default:
-            QPlainTextEdit::keyPressEvent(e);
-
+            QPlainTextEdit::keyPressEvent(event);
         }
-    } // else...
+    }
 
     if (updateCursor) {
         cursor.setVerticalMovementX(-1);
         setTextCursor( cursor );
         ensureCursorVisible();
     }
-    if (mDoc->keyDownActionEnabled()) doKeyAction(e);
+
+    if (mDoc->keyDownActionEnabled() || Main::documentManager()->globalKeyDownActionEnabled())
+        doKeyAction(event);
 }
     
+void GenericCodeEditor::handleKeyDown(QKeyEvent *event, QTextCursor & textCursor)
+{
+    if (textCursor.block() == textDocument()->lastBlock()) {
+        QTextCursor::MoveMode moveMode = event->modifiers() & Qt::SHIFT ? QTextCursor::KeepAnchor
+                                                                        : QTextCursor::MoveAnchor;
+
+        textCursor.movePosition(QTextCursor::EndOfBlock, moveMode);
+        setTextCursor(textCursor);
+    } else
+        QPlainTextEdit::keyPressEvent(event);
+}
+
+void GenericCodeEditor::handleKeyUp(QKeyEvent *event, QTextCursor & textCursor)
+{
+    if (textCursor.block() == textDocument()->firstBlock()) {
+        QTextCursor::MoveMode moveMode = event->modifiers() & Qt::SHIFT ? QTextCursor::KeepAnchor
+                                                                        : QTextCursor::MoveAnchor;
+
+        textCursor.movePosition(QTextCursor::StartOfBlock, moveMode);
+        setTextCursor(textCursor);
+    } else
+        QPlainTextEdit::keyPressEvent(event);
+}
+
+void GenericCodeEditor::handleKeyDelete(QKeyEvent *event, QTextCursor & textCursor)
+{
+    if (event->modifiers() & Qt::META) {
+         textCursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+         textCursor.removeSelectedText();
+    } else
+        QPlainTextEdit::keyPressEvent(event);
+}
+
+void GenericCodeEditor::handleKeyBackspace(QKeyEvent * event, QTextCursor & textCursor, bool & updateCursor)
+{
+    if (event->modifiers() & Qt::META) {
+        textCursor.movePosition(QTextCursor::StartOfBlock, QTextCursor::KeepAnchor);
+        textCursor.removeSelectedText();
+    } else {
+        if ( !overwriteMode()
+             || (textCursor.positionInBlock() == 0)
+             || textCursor.hasSelection() ) {
+            QPlainTextEdit::keyPressEvent(event);
+        } else {
+            // in overwrite mode, backspace should insert a space
+            textCursor.beginEditBlock();
+            textCursor.movePosition(QTextCursor::PreviousCharacter, QTextCursor::KeepAnchor);
+            QString selectedText = textCursor.selectedText();
+            if (selectedText == QStringLiteral(" ") ||
+                selectedText == QStringLiteral("\t") ) {
+                textCursor.clearSelection();
+            } else {
+                textCursor.insertText(QString(QChar(' ')));
+                textCursor.movePosition(QTextCursor::PreviousCharacter);
+            }
+            textCursor.endEditBlock();
+        }
+        updateCursor = true;
+    }
+}
+
+void GenericCodeEditor::handleKeyRightParentheses(QKeyEvent *event, QTextCursor &textCursor)
+{
+    if( !textCursor.atBlockEnd() ) {
+        QTextCursor nextCharCursor( textCursor );
+        nextCharCursor.movePosition( QTextCursor::NextCharacter, QTextCursor::KeepAnchor );
+
+        if( nextCharCursor.selectedText() == event->text() ) {
+            // don't insert, just move
+            moveCursor( QTextCursor::NextCharacter );
+            return;
+        }
+    }
+
+    QPlainTextEdit::keyPressEvent( event );
+}
+
 void GenericCodeEditor::keyReleaseEvent(QKeyEvent * e)
 {
-    if(mDoc->keyUpActionEnabled()) doKeyAction(e);
+    if(mDoc->keyUpActionEnabled() || Main::documentManager()->globalKeyUpActionEnabled()) doKeyAction(e);
 }
     
 void GenericCodeEditor::doKeyAction( QKeyEvent * ke )
@@ -634,12 +666,12 @@ void GenericCodeEditor::doKeyAction( QKeyEvent * ke )
     
     if(ke->type() == QEvent::KeyPress)
     {
-        type = QString("keyDown");
+        type = QStringLiteral("keyDown");
     } else {
-        type = QString("keyUp");
+        type = QStringLiteral("keyUp");
     }
 
-    Main::evaluateCodeIfCompiled(QString("Document.findByQUuid(\'%1\').%2(%3, %4, %5, %6)").arg(mDoc->id().constData()).arg(type).arg(mods).arg(unicode).arg(keycode).arg(key), true);
+    Main::evaluateCodeIfCompiled(QStringLiteral("Document.findByQUuid(\'%1\').%2(%3, %4, %5, %6)").arg(mDoc->id().constData()).arg(type).arg(mods).arg(unicode).arg(keycode).arg(key), true);
     
 }
     
@@ -658,7 +690,7 @@ void GenericCodeEditor::mousePressEvent(QMouseEvent * e)
                 button = -1;
         }
     
-        Main::evaluateCodeIfCompiled(QString("Document.findByQUuid(\'%1\').mouseDown(%2, %3, %4, %5, 1)").arg(mDoc->id().constData()).arg(e->x()).arg(e->y()).arg(e->modifiers()).arg(button), true);
+        Main::evaluateCodeIfCompiled(QStringLiteral("Document.findByQUuid(\'%1\').mouseDown(%2, %3, %4, %5, 1)").arg(mDoc->id().constData()).arg(e->x()).arg(e->y()).arg(e->modifiers()).arg(button), true);
     }
     
     QPlainTextEdit::mousePressEvent(e);
@@ -679,7 +711,7 @@ void GenericCodeEditor::mouseDoubleClickEvent(QMouseEvent * e)
                 button = -1;
         }
         
-        Main::evaluateCodeIfCompiled(QString("Document.findByQUuid(\'%1\').mouseDown(%2, %3, %4, %5, 2)").arg(mDoc->id().constData()).arg(e->x()).arg(e->y()).arg(e->modifiers()).arg(button), true);
+        Main::evaluateCodeIfCompiled(QStringLiteral("Document.findByQUuid(\'%1\').mouseDown(%2, %3, %4, %5, 2)").arg(mDoc->id().constData()).arg(e->x()).arg(e->y()).arg(e->modifiers()).arg(button), true);
     }
     
     QPlainTextEdit::mouseDoubleClickEvent(e);
@@ -700,7 +732,7 @@ void GenericCodeEditor::mouseReleaseEvent(QMouseEvent * e)
                 button = -1;
         }
         
-        Main::evaluateCodeIfCompiled(QString("Document.findByQUuid(\'%1\').mouseUp(%2, %3, %4, %5)").arg(mDoc->id().constData()).arg(e->x()).arg(e->y()).arg(e->modifiers()).arg(button), true);
+        Main::evaluateCodeIfCompiled(QStringLiteral("Document.findByQUuid(\'%1\').mouseUp(%2, %3, %4, %5)").arg(mDoc->id().constData()).arg(e->x()).arg(e->y()).arg(e->modifiers()).arg(button), true);
         
     }
     QPlainTextEdit::mouseReleaseEvent(e);
@@ -848,6 +880,15 @@ void GenericCodeEditor::onCursorPositionChanged()
     if (mHighlightCurrentLine)
         updateCurrentLineHighlighting();
     mLastCursorBlock = textCursor().blockNumber();
+    updateDocLastSelection();
+}
+    
+void GenericCodeEditor::updateDocLastSelection()
+{
+    QTextCursor cursor = textCursor();
+    int start = cursor.selectionStart();
+    int range = cursor.selectionEnd() - start;
+    Main::scProcess()->updateSelectionMirrorForDocument(mDoc, start, range);
 }
 
 void GenericCodeEditor::updateCurrentLineHighlighting()
@@ -906,10 +947,6 @@ void GenericCodeEditor::paintLineIndicator( QPaintEvent *e )
     QPainter p( mLineIndicator );
 
     p.fillRect( r, plt.color( QPalette::Mid ) );
-    p.setPen( plt.color(QPalette::Dark) );
-    p.drawLine( r.topRight(), r.bottomRight() );
-
-    p.setPen( plt.color(QPalette::ButtonText) );
 
     QTextDocument *doc = QPlainTextEdit::document();
     QTextCursor cursor(textCursor());
@@ -942,6 +979,7 @@ void GenericCodeEditor::paintLineIndicator( QPaintEvent *e )
             }
 
             QString number = QString::number(num + 1);
+            p.setPen(plt.color(QPalette::ButtonText));
             p.drawText(0, top, mLineIndicator->width() - 4, bottom - top,
                        Qt::AlignRight, number);
 
@@ -1138,6 +1176,18 @@ void GenericCodeEditor::moveLineDown()
     moveLineUpDown(false);
 }
 
+void GenericCodeEditor::deleteWord()
+{
+    QTextCursor cur = textCursor();
+
+    cur.beginEditBlock();
+
+    cur.movePosition(QTextCursor::StartOfWord, QTextCursor::KeepAnchor);
+    cur.deletePreviousChar();
+
+    cur.endEditBlock();
+}
+
 void GenericCodeEditor::gotoPreviousEmptyLine()
 {
     gotoEmptyLineUpDown(true);
@@ -1198,6 +1248,7 @@ void GenericCodeEditor::hideMouseCursor()
 
 void GenericCodeEditor::setActiveAppearance(bool active)
 {
+    if(active) mDoc->setLastActiveEditor(this);
     mOverlayAnimator->setActiveAppearance(active);
     mEditorBoxIsActive = active;
 }

@@ -43,6 +43,7 @@ QC_DECLARE_FACTORY( QcScrollWidget, QcScrollWidgetFactory );
 QcScrollWidget::QcScrollWidget( QWidget *parent ) : QcCanvas( parent )
 {
   setSizePolicy( QSizePolicy::Minimum, QSizePolicy::Minimum );
+  setAttribute(Qt::WA_AcceptTouchEvents);
 }
 
 QSize QcScrollWidget::sizeHint() const
@@ -135,6 +136,11 @@ QPointF QcScrollArea::visibleOrigin() const
 
 void QcScrollArea::setVisibleOrigin( const QPointF &pt )
 {
+  if (horizontalScrollBar()->maximum() < pt.x())
+    horizontalScrollBar()->setMaximum(pt.x());
+  if (verticalScrollBar()->maximum() < pt.y())
+    verticalScrollBar()->setMaximum(pt.y());
+  
   horizontalScrollBar()->setValue( pt.x() );
   verticalScrollBar()->setValue( pt.y() );
 }

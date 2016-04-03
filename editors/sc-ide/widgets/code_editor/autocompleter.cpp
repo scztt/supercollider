@@ -23,20 +23,18 @@
 #include "autocompleter.hpp"
 #include "sc_editor.hpp"
 #include "tokens.hpp"
-#include "../util/popup_widget.hpp"
 #include "../../core/sc_introspection.hpp"
 #include "../../core/sc_process.hpp"
 #include "../../core/main.hpp"
+#include "../../core/util/standard_dirs.hpp"
+#include "../main_window.hpp"
+#include "../help_browser.hpp"
 
 #include "yaml-cpp/node.h"
 #include "yaml-cpp/parser.h"
 
 #include <QDebug>
 #include <QLabel>
-#include <QListView>
-#include <QStandardItemModel>
-#include <QStandardItem>
-#include <QHBoxLayout>
 #include <QScrollBar>
 #include <QApplication>
 #include <QDesktopWidget>
@@ -64,119 +62,6 @@ static QString incrementedString( const QString & other )
     return str;
 }
 
-class CompletionMenu : public PopUpWidget
-{
-public:
-    enum DataRole {
-        CompletionRole = Qt::UserRole,
-        MethodRole
-    };
-
-    CompletionMenu( QWidget * parent = 0 ):
-        PopUpWidget(parent),
-        mCompletionRole( Qt::DisplayRole )
-    {
-        mModel = new QStandardItemModel(this);
-        mFilterModel = new QSortFilterProxyModel(this);
-        mFilterModel->setSourceModel(mModel);
-
-        mListView = new QListView();
-        mListView->setModel(mFilterModel);
-        mListView->setFrameShape(QFrame::NoFrame);
-
-        QHBoxLayout *layout = new QHBoxLayout(this);
-        layout->addWidget(mListView);
-        layout->setContentsMargins(1,1,1,1);
-
-        connect(mListView, SIGNAL(clicked(QModelIndex)), this, SLOT(accept()));
-
-        mListView->setFocus(Qt::OtherFocusReason);
-
-        resize(200, 200);
-
-        parent->installEventFilter(this);
-    }
-
-    void addItem( QStandardItem * item )
-    {
-        mModel->appendRow( item );
-    }
-
-    void setCompletionRole( int role )
-    {
-        mFilterModel->setFilterRole(role);
-        mFilterModel->setSortRole(role);
-        mCompletionRole = role;
-    }
-
-    QString currentText()
-    {
-        QStandardItem *item =
-            mModel->itemFromIndex (
-                mFilterModel->mapToSource (
-                    mListView->currentIndex()));
-        if (item)
-            return item->data(mCompletionRole).toString();
-
-        return QString();
-    }
-
-    const ScLanguage::Method * currentMethod()
-    {
-        QStandardItem *item =
-            mModel->itemFromIndex (
-                mFilterModel->mapToSource (
-                    mListView->currentIndex()));
-
-        return item ? item->data(MethodRole).value<const ScLanguage::Method*>() : 0;
-    }
-
-    QString exec( const QRect & rect )
-    {
-        QString result;
-        QPointer<CompletionMenu> self = this;
-        if (PopUpWidget::exec(rect)) {
-            if (!self.isNull())
-                result = currentText();
-        }
-        return result;
-    }
-
-    QSortFilterProxyModel *model() { return mFilterModel; }
-
-    QListView *view() { return mListView; }
-
-protected:
-    virtual bool eventFilter( QObject * obj, QEvent * ev )
-    {
-        if (isVisible() && obj == parentWidget() && ev->type() == QEvent::KeyPress)
-        {
-            QKeyEvent *kev = static_cast<QKeyEvent*>(ev);
-            switch(kev->key())
-            {
-            case Qt::Key_Up:
-            case Qt::Key_Down:
-            case Qt::Key_PageUp:
-            case Qt::Key_PageDown:
-                QApplication::sendEvent( mListView, ev );
-                return true;
-            case Qt::Key_Return:
-            case Qt::Key_Enter:
-                accept();
-                return true;
-            }
-        }
-
-        return PopUpWidget::eventFilter(obj, ev);
-    }
-
-private:
-    QListView *mListView;
-    QStandardItemModel *mModel;
-    QSortFilterProxyModel *mFilterModel;
-    int mCompletionRole;
-};
-
 class MethodCallWidget : public QWidget
 {
 public:
@@ -187,7 +72,7 @@ public:
         mLabel->setTextFormat( Qt::RichText );
         mLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 
-#ifdef Q_WS_X11
+#if defined(Q_WS_X11) && !defined(__NetBSD__)
         QStyle *style = this->style();
         if (QProxyStyle *proxyStyle = qobject_cast<QProxyStyle*>(style))
             style = proxyStyle->baseStyle();
@@ -307,7 +192,7 @@ AutoCompleter::AutoCompleter( ScCodeEditor *editor ):
              this, SLOT(hideWidgets()) );
     connect( editor->verticalScrollBar(), SIGNAL(valueChanged(int)),
              this, SLOT(hideWidgets()) );
-    connect(Main::scProcess(), SIGNAL(introspectionAboutToSwap()),
+    connect(Main::scProcess(), SIGNAL(introspectionChanged()),
             this, SLOT(clearMethodCallStack()));
 }
 
@@ -324,7 +209,6 @@ inline QTextDocument *AutoCompleter::document()
 
 void AutoCompleter::keyPress( QKeyEvent *e )
 {
-    int key = e->key();
     switch (e->key())
     {
     case Qt::Key_ParenLeft:
@@ -562,7 +446,7 @@ void AutoCompleter::triggerCompletion(bool forceShow)
 
     mCompletion.on = true;
 
-    qDebug() << QString("Completion: ON <%1>").arg(mCompletion.base);
+    qDebug() << QStringLiteral("Completion: ON <%1>").arg(mCompletion.base);
 
     showCompletionMenu(forceShow);
 
@@ -574,7 +458,7 @@ void AutoCompleter::quitCompletion( const QString & reason )
 {
     Q_ASSERT(mCompletion.on);
 
-    qDebug() << QString("Completion: OFF (%1)").arg(reason);
+    qDebug() << QStringLiteral("Completion: OFF (%1)").arg(reason);
 
     if (mCompletion.menu) {
         mCompletion.menu->hide();
@@ -626,6 +510,13 @@ void AutoCompleter::showCompletionMenu(bool forceShow)
     menu->popup( popupTargetRect );
 
     updateCompletionMenu(forceShow);
+
+    if (mCompletion.type == ClassCompletion &&
+            Main::settings()->value("IDE/editor/showAutocompleteHelp").toBool()) {
+        connect(menu, SIGNAL(itemChanged(int)), this, SLOT(updateCompletionMenuInfo()));
+        connect(menu, SIGNAL(infoClicked(QString)), this, SLOT(gotoHelp(QString)));
+        updateCompletionMenuInfo();
+    }
 }
 
 CompletionMenu * AutoCompleter::menuForClassCompletion(CompletionDescription const & completion,
@@ -653,6 +544,8 @@ CompletionMenu * AutoCompleter::menuForClassCompletion(CompletionDescription con
         Class *klass = it->second.data();
         menu->addItem( new QStandardItem(klass->name) );
     }
+
+    menu->adapt();
 
     return menu;
 }
@@ -718,6 +611,8 @@ CompletionMenu * AutoCompleter::menuForClassMethodCompletion(CompletionDescripti
         menu->addItem(item);
     }
 
+    menu->adapt();
+
     return menu;
 }
 
@@ -767,6 +662,9 @@ CompletionMenu * AutoCompleter::menuForMethodCompletion(CompletionDescription co
 
         it = range.second;
     }
+
+    menu->adapt();
+
     return menu;
 }
 
@@ -804,37 +702,37 @@ const ScLanguage::Class * AutoCompleter::classForToken( Token::Type tokenType, c
         ;
     }
 
-    if (tokenString == QString("true"))
+    if (tokenString == QStringLiteral("true"))
         return introspection.findClass("True");
 
-    if (tokenString == QString("false"))
+    if (tokenString == QStringLiteral("false"))
         return introspection.findClass("False");
 
-    if (tokenString == QString("nil"))
+    if (tokenString == QStringLiteral("nil"))
         return introspection.findClass("Nil");
 
-    if (tokenString == QString("thisProcess"))
+    if (tokenString == QStringLiteral("thisProcess"))
         return introspection.findClass("Main");
 
-    if (tokenString == QString("thisFunction"))
+    if (tokenString == QStringLiteral("thisFunction"))
         return introspection.findClass("Function");
 
-    if (tokenString == QString("thisMethod"))
+    if (tokenString == QStringLiteral("thisMethod"))
         return introspection.findClass("Method");
 
-    if (tokenString == QString("thisFunctionDef"))
+    if (tokenString == QStringLiteral("thisFunctionDef"))
         return introspection.findClass("FunctionDef");
 
-    if (tokenString == QString("thisThread"))
+    if (tokenString == QStringLiteral("thisThread"))
         return introspection.findClass("Thread");
 
-    if (tokenString == QString("currentEnvironment"))
+    if (tokenString == QStringLiteral("currentEnvironment"))
         return introspection.findClass("Environment");
 
-    if (tokenString == QString("topEnvironment"))
+    if (tokenString == QStringLiteral("topEnvironment"))
         return introspection.findClass("Environment");
 
-    if (tokenString == QString("inf"))
+    if (tokenString == QStringLiteral("inf"))
         return introspection.findClass("Float");
 
     return NULL;
@@ -864,6 +762,10 @@ void AutoCompleter::updateCompletionMenu(bool forceShow)
             menu->hide();
     } else
         menu->hide();
+
+    if (mCompletion.type == ClassCompletion &&
+            Main::settings()->value("IDE/editor/showAutocompleteHelp").toBool())
+        updateCompletionMenuInfo();
 }
 
 void AutoCompleter::onCompletionMenuFinished( int result )
@@ -894,6 +796,28 @@ void AutoCompleter::onCompletionMenuFinished( int result )
     //quitCompletion("cancelled");
 }
 
+void AutoCompleter::updateCompletionMenuInfo()
+{
+    DocNode *node = parseHelpClass(findHelpClass(mCompletion.menu->currentText()));
+    if (!node) {
+        mCompletion.menu->addInfo(QString());
+        return;
+    }
+
+    QString examples = parseClassElement(node, "EXAMPLES");
+    if (!examples.isEmpty())
+        examples.prepend("<h4>Examples</h4>");
+// MSVStudio 2013 does not concatenate multiple QStringliterals ("""") properly
+// see http://blog.qt.io/blog/2014/06/13/qt-weekly-13-qstringliteral/
+    QString infos = QStringLiteral("<h4>%1</h4>%2%3<p><a href=\"%4\">go to help</a>")
+                    .arg(parseClassElement(node, "SUMMARY"))
+                    .arg(parseClassElement(node, "DESCRIPTION"))
+                    .arg(examples)
+                    .arg(mCompletion.menu->currentText());
+    mCompletion.menu->addInfo(infos);
+    doc_node_free_tree(node);
+}
+
 void AutoCompleter::triggerMethodCallAid( bool explicitTrigger )
 {
     using namespace ScLanguage;
@@ -904,7 +828,6 @@ void AutoCompleter::triggerMethodCallAid( bool explicitTrigger )
         return;
     }
 
-    QTextDocument *doc = document();
     QTextCursor cursor( mEditor->textCursor() );
 
     // Find the first bracket that defines a method call
@@ -1056,6 +979,8 @@ const ScLanguage::Method *AutoCompleter::disambiguateMethod
             item->setData( QVariant::fromValue(method), CompletionMenu::MethodRole );
             menu->addItem(item);
         }
+
+        menu->adapt();
 
         QRect popupTargetRect = globalCursorRect( cursorPos ).adjusted(0,-5,0,5);
 
@@ -1309,6 +1234,79 @@ QRect AutoCompleter::globalCursorRect( int cursorPosition )
     QRect r = mEditor->cursorRect(cursor);
     r.moveTopLeft( mEditor->viewport()->mapToGlobal( r.topLeft() ) );
     return r;
+}
+
+QString AutoCompleter::findHelpClass(QString klass)
+{
+    QString file = standardDirectory(ScResourceDir)
+                                    .append("/HelpSource/Classes/")
+                                    .append(klass).append(".schelp");
+    if (QFile::exists(file))
+        return file;
+
+    return QString();
+}
+
+DocNode * AutoCompleter::parseHelpClass(QString file)
+{
+    if (file.isEmpty())
+        return NULL;
+
+    return scdoc_parse_file(file.toStdString().c_str(), 0);
+}
+
+QString AutoCompleter::parseClassElement(DocNode *node, QString element)
+{
+    if (QString(node->id) == element) {
+        QString str;
+        parseClassNode(node, &str);
+        return str;
+    }
+
+    for (int i = 0; i < node->n_childs; i++) {
+        QString ret = parseClassElement(node->children[i], element);
+        if (!ret.isEmpty())
+            return ret;
+    }
+
+    return QString();
+}
+
+void AutoCompleter::parseClassNode(DocNode *node, QString *str)
+{
+    QString id = node->id;
+
+    if (id == "NOTE")
+        str->append("<br><br>Note:<br>");
+
+    if (node->text) {
+        if (id == "LINK") {
+            QStringList locations = QString(node->text).split('/').last().split('#');
+
+            /* if empty, the link is on the same page. No HTML link */
+            if (locations.first().isEmpty())
+                str->append(QStringLiteral(" %1 ").arg(locations.first()));
+            else
+                str->append(QStringLiteral("<a href=\"%1\">%2</a>").arg(locations.first())
+                                                            .arg(locations.last()));
+        } else if (id == "CODE")  {
+            str->append(QStringLiteral("<code>%1</code>").arg(node->text));
+        } else if (id == "CODEBLOCK")  {
+            str->append(QStringLiteral("<pre><code>%1</code></pre>").arg(node->text));
+        } else {
+            str->append(node->text);
+        }
+    }
+
+    for (int i = 0; i < node->n_childs; i++)
+        parseClassNode(node->children[i], str);
+}
+
+void AutoCompleter::gotoHelp(QString symbol)
+{
+    HelpBrowserDocklet *helpDock = MainWindow::instance()->helpBrowserDocklet();
+    helpDock->browser()->gotoHelpFor(symbol);
+    helpDock->focus();
 }
 
 } // namespace ScIDE

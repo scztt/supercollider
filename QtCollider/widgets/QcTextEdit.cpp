@@ -40,6 +40,8 @@ QC_DECLARE_FACTORY( QcTextEdit, QcTextEditFactory );
 
 QcTextEdit::QcTextEdit() : _interpretSelection(true)
 {
+  setAttribute(Qt::WA_AcceptTouchEvents);
+
   connect( this, SIGNAL(interpret(QString)),
            qApp, SLOT(interpret(QString)),
            Qt::QueuedConnection );
@@ -112,7 +114,7 @@ void QcTextEdit::setTextFont( const QFont &f )
 
   QTextCursor cursor( document() );
   cursor.select( QTextCursor::Document );
-  cursor.setCharFormat( format );
+  cursor.mergeCharFormat( format );
 
   QTextEdit::setFont(f);
 }
@@ -124,7 +126,7 @@ void QcTextEdit::setTextColor( const QColor &color )
 
   QTextCursor cursor( document() );
   cursor.select( QTextCursor::Document );
-  cursor.setCharFormat( format );
+  cursor.mergeCharFormat( format );
 }
 
 void QcTextEdit::setRangeColor( const QVariantList &list )
@@ -140,7 +142,7 @@ void QcTextEdit::setRangeColor( const QVariantList &list )
   QTextCursor cursor( document() );
   cursor.movePosition( QTextCursor::NextCharacter, QTextCursor::MoveAnchor, start );
   cursor.movePosition( QTextCursor::NextCharacter, QTextCursor::KeepAnchor, size );
-  cursor.setCharFormat( format );
+  cursor.mergeCharFormat( format );
 }
 
 void QcTextEdit::setRangeFont( const QVariantList & list )
@@ -156,7 +158,7 @@ void QcTextEdit::setRangeFont( const QVariantList & list )
   QTextCursor cursor( document() );
   cursor.movePosition( QTextCursor::NextCharacter, QTextCursor::MoveAnchor, start );
   cursor.movePosition( QTextCursor::NextCharacter, QTextCursor::KeepAnchor, size );
-  cursor.setCharFormat( format );
+  cursor.mergeCharFormat( format );
 }
 
 void QcTextEdit::setRangeText( const QVariantList & list )
@@ -178,16 +180,15 @@ void QcTextEdit::keyPressEvent( QKeyEvent *e )
       && ( e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter ) )
   {
     QTextCursor c(textCursor());
-
-    if ( !c.hasSelection() ) {
-      c.movePosition( QTextCursor::StartOfLine );
-      c.movePosition( QTextCursor::EndOfLine, QTextCursor::KeepAnchor );
-    }
+    QString code;
 
     if ( c.hasSelection() ) {
-      QString selection( c.selectedText() );
-      Q_EMIT( interpret( prepareText(selection) ) );
+      code = c.selectedText();
+    } {
+      code = c.block().text();
     }
+
+    Q_EMIT( interpret( prepareText(code) ) );
 
     return;
   }

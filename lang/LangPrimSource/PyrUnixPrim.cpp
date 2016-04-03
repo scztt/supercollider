@@ -40,11 +40,16 @@ Primitives for Unix.
 
 #include "SC_Lock.h"
 
-#ifdef SC_WIN32
+#include <vector>
+#include <boost/filesystem.hpp>
+
+#ifdef _WIN32
 #include "SC_Win32Utils.h"
 #else
 #include <libgen.h>
 #endif
+
+using namespace boost::filesystem;
 
 extern bool compiledOK;
 PyrSymbol* s_unixCmdAction;
@@ -129,7 +134,7 @@ static void string_popen_thread_func(struct sc_process *process)
 	if(process->postOutput)
 		postfl("RESULT = %d\n", res);
 
-	free(process);
+	delete process;
 
 	gLangMutex.lock();
 	if(compiledOK) {
@@ -147,43 +152,113 @@ static void string_popen_thread_func(struct sc_process *process)
 int prString_POpen(struct VMGlobals *g, int numArgsPushed);
 int prString_POpen(struct VMGlobals *g, int numArgsPushed)
 {
-	struct sc_process *process;
 	PyrSlot *a = g->sp - 1;
 	PyrSlot *b = g->sp;
-	int err;
 
 	if (!isKindOfSlot(a, class_string)) return errWrongType;
 
-	char *cmdline = (char*)malloc(slotRawObject(a)->size + 1);
-	err = slotStrVal(a, cmdline, slotRawObject(a)->size + 1);
-	if(err) {
-		free(cmdline);
-		return errFailed;
-	}
+	char *cmdline = new char[slotRawObject(a)->size + 1];
+	slotStrVal(a, cmdline, slotRawObject(a)->size + 1);
 
 #ifdef SC_IPHONE
 	SetInt(a, 0);
 	return errNone;
 #endif
 
-	process = (struct sc_process *)malloc(sizeof(struct sc_process));
+	sc_process *process = new sc_process;
 	process->stream = sc_popen(cmdline, &process->pid, "r");
 	setvbuf(process->stream, 0, _IONBF, 0);
+	pid_t pid = process->pid;
 
 	process->postOutput = IsTrue(b);
 
-	free(cmdline);
+	delete [] cmdline;
 
 	if(process->stream == NULL) {
-		free(process);
+		delete process;
 		return errFailed;
 	}
 
 	thread thread(std::bind(string_popen_thread_func, process));
 	thread.detach();
 
-	SetInt(a, process->pid);
+	SetInt(a, pid);
 	return errNone;
+}
+
+int prArrayPOpen(struct VMGlobals *g, int numArgsPushed);
+int prArrayPOpen(struct VMGlobals *g, int numArgsPushed)
+{
+	PyrObject *obj;
+
+	PyrSlot *a = g->sp - 1;
+	PyrSlot *b = g->sp;
+	
+#ifdef SC_IPHONE
+	SetInt(a, 0);
+	return errNone;
+#endif
+	
+	if (NotObj(a)) return errWrongType;
+
+	obj = slotRawObject(a);
+	if (!(slotRawInt(&obj->classptr->classFlags) & classHasIndexableInstances))
+		return errNotAnIndexableObject;
+		
+	if( obj->size < 1)
+		return errFailed;
+		
+	PyrSlot filenameSlot;
+	getIndexedSlot(obj, &filenameSlot, 0);
+	if (!isKindOfSlot(&filenameSlot, class_string)) return errWrongType;
+	char filename[PATH_MAX];
+	if (slotRawObject(&filenameSlot)->size > PATH_MAX - 1) return errFailed;
+	slotStrVal(&filenameSlot, filename, slotRawObject(&filenameSlot)->size + 1);
+	
+	std::vector<char *> argv (obj->size + 1);
+	
+	path p;
+	p /= filename;
+	std::string filenameOnly = p.filename().string();
+	std::vector<char> vfilenameOnly(filenameOnly.begin(), filenameOnly.end());
+	vfilenameOnly.push_back('\0');
+	
+	argv[0] = vfilenameOnly.data();
+	argv[obj->size] = NULL;
+		
+	if(obj->size > 1) {
+		for (int i=1; i<obj->size; ++i) {
+			PyrSlot argSlot;
+			getIndexedSlot(obj, &argSlot, i);
+			if (!isKindOfSlot(&argSlot, class_string)) return errWrongType;
+			char *arg = new char[slotRawObject(&argSlot)->size + 1];
+			slotStrVal(&argSlot, arg, slotRawObject(&argSlot)->size + 1);
+			argv[i] = arg;
+		}
+	}
+	
+	sc_process *process = new sc_process;
+	process->stream = sc_popen_argv(filename, argv.data(), &process->pid, "r");
+	setvbuf(process->stream, 0, _IONBF, 0);
+	pid_t pid = process->pid;
+
+	process->postOutput = IsTrue(b);
+
+	if(process->stream == NULL) {
+		delete process;
+		return errFailed;
+	}
+
+	thread thread(std::bind(string_popen_thread_func, process));
+	thread.detach();
+
+	for (int i=1; i<obj->size; ++i) {
+		delete [] argv[i];
+	}
+
+	SetInt(a, pid);
+	return errNone;
+	
 }
 
 int prPidRunning(VMGlobals *g, int numArgsPushed);
@@ -193,7 +268,7 @@ int prPidRunning(VMGlobals *g, int numArgsPushed)
 
 	a = g->sp;
 
-#ifdef SC_WIN32
+#ifdef _WIN32
 	HANDLE handle;
 
 	handle = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, slotRawInt(a));
@@ -231,7 +306,7 @@ int prUnix_Errno(struct VMGlobals *g, int numArgsPushed)
 
 #include <time.h>
 
-static void fillSlotsFromTime(PyrSlot * result, struct tm* tm, chrono::system_clock::time_point const & now)
+static void fillSlotsFromTime(PyrSlot * result, struct tm* tm, std::chrono::system_clock::time_point const & now)
 {
 	PyrSlot *slots = slotRawObject(result)->slots;
 
@@ -242,12 +317,12 @@ static void fillSlotsFromTime(PyrSlot * result, struct tm* tm, chrono::system_cl
 	SetInt(slots+4, tm->tm_min);
 	SetInt(slots+5, tm->tm_sec);
 	SetInt(slots+6, tm->tm_wday);
-	SetFloat(slots+7, chrono::duration_cast<chrono::nanoseconds>(now.time_since_epoch()).count() * 1.0e-9);
+	SetFloat(slots+7, std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count() * 1.0e-9);
 }
 
 int prLocalTime(struct VMGlobals *g, int numArgsPushed)
 {
-	using namespace chrono;
+	using namespace std::chrono;
 	system_clock::time_point now = system_clock::now();
 	time_t now_time_t = system_clock::to_time_t(now);
 	struct tm* tm = localtime(&now_time_t);
@@ -259,7 +334,7 @@ int prLocalTime(struct VMGlobals *g, int numArgsPushed)
 
 int prGMTime(struct VMGlobals *g, int numArgsPushed)
 {
-	using namespace chrono;
+	using namespace std::chrono;
 	system_clock::time_point now = system_clock::now();
 	time_t now_time_t = system_clock::to_time_t(now);
 	struct tm* tm = gmtime(&now_time_t);
@@ -359,7 +434,7 @@ int prGetPid(VMGlobals *g, int numArgsPushed)
 {
 	PyrSlot *a = g->sp;
 	SetInt(a,
-#ifndef SC_WIN32
+#ifndef _WIN32
 		getpid()
 #else
 		GetCurrentProcessId()
@@ -390,4 +465,5 @@ void initUnixPrimitives()
 	definePrimitive(base, index++, "_TimeSeed", prTimeSeed, 1, 0);
 	definePrimitive(base, index++, "_PidRunning", prPidRunning, 1, 0);
 	definePrimitive(base, index++, "_GetPid", prGetPid, 1, 0);
+	definePrimitive(base, index++, "_ArrayPOpen", prArrayPOpen, 2, 0);
 }

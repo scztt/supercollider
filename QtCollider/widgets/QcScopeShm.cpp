@@ -27,6 +27,7 @@
 #include <QPainter>
 #include <QTimer>
 #include <QResizeEvent>
+#include <QWindow>
 
 QC_DECLARE_QWIDGET_FACTORY(QcScopeShm);
 
@@ -42,13 +43,14 @@ QcScopeShm::QcScopeShm() :
   xZoom( 1.f ),
   yZoom( 1.f ),
   _style( 0 ),
-  _bkg( QColor(0,0,0) )
+  _bkg( QColor(0,0,0) ),
+  _fill( true )
 {
   setAttribute( Qt::WA_OpaquePaintEvent, true );
   setAutoFillBackground(false);
 
   setSizePolicy( QSizePolicy::Expanding, QSizePolicy::Expanding );
-
+  
   timer = new QTimer( this );
   timer->setInterval( 50 );
   connect( timer, SIGNAL( timeout() ), this, SLOT( updateScope() ) );
@@ -203,7 +205,9 @@ void QcScopeShm::paint1D( bool overlapped, int chanCount, int maxFrames, int fra
     for( int ch = 0; ch < chanCount; ch++ ) {
       float *frameData = _data + (ch * maxFrames); //frame vector
       float yOrigin = yHeight * (overlapped ? 0.5 : ch + 0.5);
-      pen.setColor( ch < colors.count() ? colors[ch] : QColor(255,255,255) );
+      QColor strokeColor = ch < colors.count() ? colors[ch] : QColor(255,255,255);
+      QColor fillColor(strokeColor); fillColor.setAlpha(0.65 * 255);
+      pen.setColor( strokeColor );
 
       painter.save();
       painter.translate( area.x(), area.y() + yOrigin );
@@ -215,6 +219,14 @@ void QcScopeShm::paint1D( bool overlapped, int chanCount, int maxFrames, int fra
       for( int f = 1; f < frameCount; ++f )
         path.lineTo( xOffset + f, frameData[f] );
 
+      if (_fill) {
+        path.lineTo(xOffset + frameCount, 0);
+        path.lineTo(0, 0);
+        path.lineTo(xOffset, frameData[0]);
+        
+        painter.fillPath(path, QBrush(fillColor));
+      }
+      
       painter.drawPath(path);
 
       painter.restore();
@@ -230,13 +242,15 @@ void QcScopeShm::paint1D( bool overlapped, int chanCount, int maxFrames, int fra
     {
       float *frameData = _data + (ch * maxFrames); //frame vector
       float yOrigin = yHeight * (overlapped ? 0.5 : ch + 0.5);
-      pen.setColor( ch < colors.count() ? colors[ch] : QColor(255,255,255) );
+      QColor strokeColor = ch < colors.count() ? colors[ch] : QColor(255,255,255);
+      QColor fillColor(strokeColor); fillColor.setAlpha(0.65 * 255);
 
       painter.save();
       painter.translate( area.x(), area.y() + yOrigin );
       painter.setPen(pen);
 
-      QPainterPath path;
+      QPainterPath pathLine;
+      QPainterPath pathFill;
 
       int p=0, f=1; // pixel, frame
       float min, max;
@@ -255,17 +269,28 @@ void QcScopeShm::paint1D( bool overlapped, int chanCount, int maxFrames, int fra
 
         qreal x = p-1;
         float y = max * yRatio;
-        path.moveTo( x, y );
+        pathLine.moveTo( x, y );
         y = qMax( min * yRatio, y+1 );
-        path.lineTo( x, y );
-
+        pathLine.lineTo( x, y );
+        
+        if (_fill) {
+          pathFill.moveTo( x, y );
+          pathFill.lineTo( x, 0 );
+        }
+        
         // flip min/max to ensure continuity
         float val = min;
         min = max;
         max = val;
       }
-
-      painter.drawPath(path);
+      
+      pen.setColor(strokeColor);
+      painter.strokePath(pathLine, pen);
+      
+      if (_fill) {
+        pen.setColor(fillColor);
+        painter.strokePath(pathFill, pen);
+      }
 
       painter.restore();
     }
@@ -319,12 +344,12 @@ void QcScopeShm::connectSharedMemory( int port )
       qcDebugMsg(1,"Shared memory connected");
   } catch (std::exception & e) {
       _shm->client = 0;
-      qcErrorMsg(QString("Cannot connect to shared memory: %1").arg(e.what()) );
+      qcErrorMsg(QStringLiteral("Cannot connect to shared memory: %1").arg(e.what()) );
   }
 }
 
 void QcScopeShm::initScopeReader( ScopeShm *shm, int index )
 {
   shm->reader = shm->client->get_scope_buffer_reader( index );
-  qcDebugMsg(1,QString("Initialized scope buffer reader for index %1.").arg(index));
+  qcDebugMsg(1,QStringLiteral("Initialized scope buffer reader for index %1.").arg(index));
 }

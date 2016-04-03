@@ -22,6 +22,7 @@
 #ifndef _PYRLEXER_H_
 #define _PYRLEXER_H_
 
+#include "PyrSlot.h"
 #include "PyrSymbol.h"
 #include "SC_Export.h"
 #include "SCBase.h"
@@ -61,7 +62,7 @@ void traverseDepTree2(ClassDependancy *classdep, int level);
 void compileClassExtensions();
 void compileClass(PyrSymbol *fileSym, int startPos, int endPos, int lineOffset);
 
-SC_DLLEXPORT_C void runLibrary(PyrSymbol* selector);
+SCLANG_DLLEXPORT_C void runLibrary(PyrSymbol* selector);
 
 void interpretCmdLine(const char *textbuf, int textlen, char *methodname);
 
@@ -124,7 +125,8 @@ extern int yylen;
 extern int lexCmdLine;
 extern bool compilingCmdLine;
 extern bool compilingCmdLineErrorWindow;
-extern long zzval;
+extern intptr_t zzval;
+extern intptr_t gParserResult;
 
 extern int lineno, charno, linepos;
 extern int *linestarts;

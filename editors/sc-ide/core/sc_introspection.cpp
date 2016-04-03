@@ -47,24 +47,21 @@ Introspection::Introspection( QString const & yamlString )
         throw std::runtime_error("Introspection parse error");
 }
 
+Introspection & Introspection::operator =(Introspection && rhs)
+{
+    mClassMap           = std::move( rhs.mClassMap           );
+    mMethodMap          = std::move( rhs.mMethodMap          );
+    mClassLibraryPath   = std::move( rhs.mClassLibraryPath   );
+    mUserExtensionDir   = std::move( rhs.mUserExtensionDir   );
+    mSystemExtensionDir = std::move( rhs.mSystemExtensionDir );
+    return *this;
+}
+
 void Introspection::initPaths()
 {
-    mUserExtensionDir = standardDirectory(ScExtensionUserDir) + QString("/");
-    mSystemExtensionDir = standardDirectory(ScExtensionSystemDir) + QString("/");
+    mUserExtensionDir = standardDirectory(ScExtensionUserDir) + QStringLiteral("/");
+    mSystemExtensionDir = standardDirectory(ScExtensionSystemDir) + QStringLiteral("/");
 }
-
-Introspection::~Introspection()
-{
-    clear();
-}
-
-struct IndirectMethodCompare
-{
-    bool operator()(Method * lhs, Method * rhs) const
-    {
-        return lhs->name.get() < rhs->name.get();
-    }
-};
 
 bool Introspection::parse(const QString & yamlString )
 {
@@ -177,7 +174,9 @@ bool Introspection::parse(const QString & yamlString )
             mMethodMap.insert(make_pair(method->name, QSharedPointer<Method>(method)));
         }
 
-        qSort(klass->methods.begin(), klass->methods.end(), IndirectMethodCompare());
+        qSort(klass->methods.begin(), klass->methods.end(), [](Method * lhs, Method * rhs) {
+            return lhs->name.get() < rhs->name.get();
+        });
     }
 
     inferClassLibraryPath();
@@ -192,10 +191,10 @@ QString Introspection::compactLibraryPath(QString const & path) const
         return path.mid(mClassLibraryPath.length());
 
     if (path.startsWith(mUserExtensionDir))
-        return QString("Extensions/") + path.mid(mUserExtensionDir.length());
+        return QStringLiteral("Extensions/") + path.mid(mUserExtensionDir.length());
 
     if (path.startsWith(mSystemExtensionDir))
-        return QString("Extensions/") + path.mid(mSystemExtensionDir.length());
+        return QStringLiteral("Extensions/") + path.mid(mSystemExtensionDir.length());
 
     return path;
 }
@@ -294,6 +293,12 @@ Introspection::ClassMethodMap Introspection::constructMethodMap(const Class * kl
     }
     return methodMap;
 }
+  
+bool Method::matches(const QString& toMatch) const
+{
+    return toMatch.isEmpty() ? true : name.get().startsWith(toMatch, Qt::CaseInsensitive);
+}
+
 
 QString Method::signature( SignatureStyle style ) const
 {

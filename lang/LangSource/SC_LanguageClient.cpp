@@ -30,7 +30,7 @@
 #include <string>
 #include <cerrno>
 
-#ifdef SC_WIN32
+#ifdef _WIN32
 # include <stdio.h>
 # include <direct.h>
 # define snprintf _snprintf
@@ -61,7 +61,7 @@ extern PyrString* newPyrStringN(class PyrGC *gc, long length, long flags, long c
 // SC_LanguageClient
 // =====================================================================
 
-SC_LanguageClient* SC_LanguageClient::gInstance = 0;
+SC_LanguageClient* gInstance = 0;
 SC_Lock gInstanceMutex;
 
 class HiddenLanguageClient
@@ -175,7 +175,7 @@ void SC_LanguageClient::setCmdLine(const char* buf, size_t size)
 			memcpy(strobj->s, buf, size);
 
 			SetObject(&slotRawInterpreter(&g->process->interpreter)->cmdLine, strobj);
-			g->gc->GCWrite(slotRawObject(&g->process->interpreter), strobj);
+			g->gc->GCWriteNew(slotRawObject(&g->process->interpreter), strobj); // we know strobj is white so we can use GCWriteNew
 		}
 		unlock();
     }
@@ -344,6 +344,8 @@ void SC_LanguageClient::stopMain() { runLibrary(s_stop); }
 void SC_LanguageClient::lock() { gLangMutex.lock(); }
 bool SC_LanguageClient::trylock() { return gLangMutex.try_lock(); }
 void SC_LanguageClient::unlock() { gLangMutex.unlock(); }
+
+SC_LanguageClient* SC_LanguageClient::instance() { return gInstance; }
 
 void SC_LanguageClient::lockInstance() { gInstanceMutex.lock(); }
 void SC_LanguageClient::unlockInstance() { gInstanceMutex.unlock(); }

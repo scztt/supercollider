@@ -119,8 +119,12 @@ SimpleNumber : Number {
 	<= { arg aNumber, adverb; _LE; ^aNumber.performBinaryOpOnSimpleNumber('<=', this, adverb) }
 	>= { arg aNumber, adverb; _GE; ^aNumber.performBinaryOpOnSimpleNumber('>=', this, adverb) }
 
-	equalWithPrecision { arg that, precision=0.0001;
-		^absdif(this, that) < precision
+	equalWithPrecision { arg that, precision=0.0001, relativePrecision=0;
+		^if(relativePrecision > 0) {
+			absdif(this, that) < max(precision, relativePrecision * min(abs(this), abs(that)))
+		} {
+			absdif(this, that) < precision
+		}
 	}
 
 	hash { _ObjectHash; ^this.primitiveFailed }
@@ -171,7 +175,7 @@ SimpleNumber : Number {
 				if (this >= inMax, { ^outMax });
 			}
 		);
-    		^(this-inMin)/(inMax-inMin) * (outMax-outMin) + outMin;
+		^(this-inMin)/(inMax-inMin) * (outMax-outMin) + outMin;
 	}
 
 	linexp { arg inMin, inMax, outMin, outMax, clip=\minmax;
@@ -239,7 +243,12 @@ SimpleNumber : Number {
 				if (this >= inMax, { ^outMax });
 			}
 		);
-		if (abs(curve) < 0.001) { ^this.linlin(inMin, inMax, outMin, outMax) };
+		if (abs(curve) < 0.001) {
+			// If the value should be clipped, it has already been clipped (above).
+			// If we got this far, then linlin does not need to do any clipping.
+			// Inlining the formula here makes it even faster.
+			^(this-inMin)/(inMax-inMin) * (outMax-outMin) + outMin;
+		};
 
 		grow = exp(curve);
 		a = outMax - outMin / (1.0 - grow);
@@ -263,7 +272,10 @@ SimpleNumber : Number {
 				if (this >= inMax, { ^outMax });
 			}
 		);
-		if (abs(curve) < 0.001) { ^this.linlin(inMin, inMax, outMin, outMax) };
+		if (abs(curve) < 0.001) {
+			// If the value should be clipped, it has already been clipped (above).
+			^(this-inMin)/(inMax-inMin) * (outMax-outMin) + outMin;
+		};
 
 		grow = exp(curve);
 		a = inMax - inMin / (1.0 - grow);
@@ -370,6 +382,10 @@ SimpleNumber : Number {
 	lag3ud { ^this }
 	varlag { ^this }
 	slew   { ^this }
+
+	poll { arg trig = 10, label, trigid = -1;
+		^Poll(trig, this, label, trigid)
+	}
 
 	// support for writing synth defs
 	writeInputSpec { arg file, synth;

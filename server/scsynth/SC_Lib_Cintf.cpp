@@ -45,11 +45,7 @@
 #endif
 
 // Plugin directory in resource directory
-#if defined(_WIN32) && defined(_DEBUG)
-# define SC_PLUGIN_DIR_NAME "plugins_debug"
-#else
 # define SC_PLUGIN_DIR_NAME "plugins"
-#endif
 
 // Extension for binary plugins
 #ifndef SC_PLUGIN_EXT
@@ -79,7 +75,7 @@ SC_LibCmd* gCmdArray[NUMBER_OF_COMMANDS];
 
 void initMiscCommands();
 static bool PlugIn_LoadDir(const char *dirname, bool reportError);
-
+std::vector<void*> open_handles;
 #ifdef __APPLE__
 void read_section(const struct mach_header *mhp, unsigned long slide, const char *segname, const char *sectname)
 {
@@ -119,6 +115,30 @@ extern void DynNoise_Load(InterfaceTable *table);
 extern void FFT_UGens_Load(InterfaceTable *table);
 extern void iPhone_Load(InterfaceTable *table);
 
+
+void deinitialize_library()
+{
+#ifdef _WIN32
+	for(void * ptrhinstance : open_handles){
+		HINSTANCE hinstance = (HINSTANCE)ptrhinstance;
+		void *ptr = (void *)GetProcAddress( hinstance, "unload" );
+		if(ptr){
+			UnLoadPlugInFunc unloadFunc = (UnLoadPlugInFunc)ptr;
+			(*unloadFunc)();
+		}
+	}
+       //FreeLibrary dlclose(handle);
+#else
+	for(void * handle : open_handles){
+		void *ptr = dlsym(handle, "unload");
+		if(ptr){
+			UnLoadPlugInFunc unloadFunc = (UnLoadPlugInFunc)ptr;
+			(*unloadFunc)();
+		}
+	}
+#endif
+    open_handles.clear();
+}
 void initialize_library(const char *uGensPluginPath)
 {
 	gCmdLib     = new HashTable<SC_LibCmd, Malloc>(&gMalloc, 64, true);
@@ -309,7 +329,7 @@ static bool PlugIn_Load(const char *filename)
 	(*loadFunc)(&gInterfaceTable);
 
 	// FIXME: at the moment we never call FreeLibrary() on a loaded plugin
-
+	open_handles.push_back(hinstance);
 	return true;
 
 #else
@@ -344,6 +364,7 @@ static bool PlugIn_Load(const char *filename)
 	LoadPlugInFunc loadFunc = (LoadPlugInFunc)ptr;
 	(*loadFunc)(&gInterfaceTable);
 
+	open_handles.push_back(handle);
 	return true;
 
 #endif

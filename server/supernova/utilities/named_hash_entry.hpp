@@ -26,6 +26,8 @@
 #include "utils.hpp"
 #include "nova-tt/nova-tt/rw_mutex.hpp"
 
+#include <utilities/malloc_aligned.hpp>
+
 namespace nova   {
 namespace bi = boost::intrusive;
 
@@ -71,7 +73,8 @@ private:
             str(str), hash(hash)
         {}
 
-        symbol_data(symbol_data const & rhs) = default;
+        symbol_data(symbol_data const & rhs)             = default;
+        symbol_data & operator=(symbol_data const & rhs) = default;
 
         friend size_t hash_value(symbol_data const & value)
         {
@@ -123,9 +126,8 @@ private:
         typedef boost::unordered_set<symbol_data> table_type;
         typedef std::pair<table_type::const_iterator, bool> lookup_result_type;
 
-public:
-        symbol_table(void):
-            table(16384)
+    public:
+        symbol_table(void)
         {}
 
         symbol_data const & find(const char * str, size_t strlen)
@@ -153,7 +155,7 @@ public:
             return std::make_pair(it, it != table.end());
         }
 
-        table_type table;
+        table_type table = table_type(16384);
         nova::nonrecursive_rw_mutex mutex;
     };
 
@@ -169,8 +171,7 @@ public:
     }
 
 public:
-    symbol ():
-        data(NULL, 0)
+    symbol ()
     {}
 
     explicit symbol (const char * str):
@@ -185,7 +186,8 @@ public:
         data(lookup_string(str, length))
     {}
 
-    symbol (symbol const & rhs) = default;
+    symbol (symbol const & rhs)            = default;
+    symbol & operator=(symbol const & rhs) = default;
 
     const char * c_str(void) const
     {
@@ -207,7 +209,7 @@ public:
         return lhs.data.str < rhs.data.str;
     }
 
-    symbol_data data;
+    symbol_data data = symbol_data( nullptr, 0 );
 };
 
 class named_hash_entry:
@@ -317,5 +319,4 @@ struct named_hash_hash
 
 }
 
-#undef PURE
 #endif /* UTILITIES_NAMED_HASH_ENTRY_HPP */

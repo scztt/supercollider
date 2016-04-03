@@ -240,11 +240,12 @@
 				~proxy = proxy;
 				~server = server;
 				~group = group;
-				~out = out;
+				~out = out.value;
 				finish = ~finish;
 				~finish = {
 					finish.value;
 					proxy.nodeMap.addToEvent(currentEnvironment);
+					~out = out.value;
 				}
 			});
 			this
@@ -329,7 +330,7 @@
 					pattern,
 					\type, \bus,
 					\id, Pfunc { proxy.group.nodeID },
-					\array, Pkey(\value).collect { |x| x.keep(proxy.numChannels) },
+					\array, Pkey(\value).collect { |x| x.asArray.keep(proxy.numChannels) },
 					\out, Pfunc { proxy.index }
 				).buildForProxy( proxy, channelOffset, index )
 			},

@@ -48,12 +48,10 @@ class portaudio_backend:
     typedef detail::audio_backend_base<sample_type, float, blocking, false> super;
 
 public:
-    portaudio_backend(void):
-        stream(NULL), blocksize_(0)
+    portaudio_backend(void)
     {
         int err = Pa_Initialize();
         report_error(err, true);
-
 
         list_devices();
 
@@ -126,26 +124,57 @@ public:
         return false;
     }
 
+    void report_latency()
+    {
+        const PaStreamInfo *psi = Pa_GetStreamInfo(stream);
+        if (psi){
+            fprintf(stdout,"  Sample rate: %.3f\n", psi->sampleRate);
+            fprintf(stdout,"  Latency (in/out): %.3f / %.3f sec\n", psi->inputLatency, psi->outputLatency); 
+        }
+    }
+
     bool open_stream(std::string const & input_device, unsigned int inchans,
                      std::string const & output_device, unsigned int outchans,
-                     unsigned int samplerate, unsigned int pa_blocksize, unsigned int blocksize)
+                     unsigned int samplerate, unsigned int pa_blocksize, int h_blocksize)
     {
         int input_device_index, output_device_index;
         if (!match_device(input_device, input_device_index) || !match_device(output_device, output_device_index))
             return false;
 
         PaStreamParameters in_parameters, out_parameters;
+        PaTime suggestedLatencyIn, suggestedLatencyOut;
+        
+#ifdef __APPLE__
+        suggestedLatencyIn = Pa_GetDeviceInfo(input_device_index)->defaultHighInputLatency;
+        suggestedLatencyOut = Pa_GetDeviceInfo(output_device_index)->defaultHighOutputLatency;
+#elif
+
+        if (h_blocksize == 0){
+            if (inchans)
+                suggestedLatencyIn = Pa_GetDeviceInfo(input_device_index)->defaultHighInputLatency;
+            if (outchans)
+                suggestedLatencyOut = Pa_GetDeviceInfo(output_device_index)->defaultHighOutputLatency;
+        }else{
+            if(h_blocksize < 0){
+                if (inchans)
+                    suggestedLatencyIn = Pa_GetDeviceInfo(input_device_index)->defaultLowInputLatency;
+                if (outchans)
+                    suggestedLatencyOut = Pa_GetDeviceInfo(output_device_index)->defaultLowOutputLatency;
+            }else
+                suggestedLatencyIn = suggestedLatencyOut = (double)h_blocksize / (double)samplerate;
+        }
+#endif
 
         if (inchans) {
-            const PaDeviceInfo* device_info = Pa_GetDeviceInfo(output_device_index);
+            const PaDeviceInfo* device_info = Pa_GetDeviceInfo(input_device_index);
 
             inchans = std::min(inchans, (unsigned int)device_info->maxInputChannels);
 
             in_parameters.device = input_device_index;
             in_parameters.channelCount = inchans;
             in_parameters.sampleFormat = paFloat32 | paNonInterleaved;
-            in_parameters.suggestedLatency = device_info->defaultHighInputLatency;
-            in_parameters.hostApiSpecificStreamInfo = NULL;
+            in_parameters.suggestedLatency = suggestedLatencyIn;
+            in_parameters.hostApiSpecificStreamInfo = nullptr;
         }
 
         if (outchans) {
@@ -156,20 +185,20 @@ public:
             out_parameters.device = output_device_index;
             out_parameters.channelCount = outchans;
             out_parameters.sampleFormat = paFloat32 | paNonInterleaved;
-            out_parameters.suggestedLatency = device_info->defaultHighOutputLatency;
-            out_parameters.hostApiSpecificStreamInfo = NULL;
+            out_parameters.suggestedLatency = suggestedLatencyOut;
+            out_parameters.hostApiSpecificStreamInfo = nullptr;
         }
 
-        PaStreamParameters * in_stream_parameters  = inchans ? &in_parameters : NULL;
-        PaStreamParameters * out_stream_parameters = outchans ? &out_parameters : NULL;
+        PaStreamParameters * in_stream_parameters  = inchans ? &in_parameters : nullptr;
+        PaStreamParameters * out_stream_parameters = outchans ? &out_parameters : nullptr;
 
         PaError supported = Pa_IsFormatSupported(in_stream_parameters, out_stream_parameters, samplerate);
         report_error(supported);
         if (supported != 0)
             return false;
 
-        callback_initialized = false;
-        blocksize_ = blocksize;
+        engine_initalised = false;
+        blocksize_ = pa_blocksize;
 
         PaError opened = Pa_OpenStream(&stream, in_stream_parameters, out_stream_parameters,
                                        samplerate, pa_blocksize, paNoFlag,
@@ -185,19 +214,22 @@ public:
         output_channels = outchans;
         super::output_samples.resize(outchans);
         samplerate_ = samplerate;
+
+        cpu_time_accumulator.resize( samplerate_, blocksize_, 1 );
+
         return true;
     }
 
     void close_stream(void)
     {
-        if (stream == NULL)
+        if (stream == nullptr)
             return;
 
         deactivate_audio();
 
         int err = Pa_CloseStream(stream);
         report_error(err);
-        stream = NULL;
+        stream = nullptr;
     }
 
     void activate_audio()
@@ -257,10 +289,10 @@ private:
     int perform(const void *inputBuffer, void *outputBuffer, unsigned long frames,
                 const PaStreamCallbackTimeInfo *timeInfo, PaStreamCallbackFlags statusFlags)
     {
-        if (unlikely(!callback_initialized)) {
+        if ( unlikely(!engine_initalised) ) {
             engine_functor::init_thread();
             engine_functor::sync_clock();
-            callback_initialized = true;
+            engine_initalised = true;
         }
 
         if (statusFlags & (paInputOverflow | paInputUnderflow | paOutputOverflow | paOutputUnderflow))
@@ -295,9 +327,9 @@ private:
         return self->perform(input, output, frame_count, time_info, status_flags);
     }
 
-    PaStream *stream;
-    uint32_t blocksize_;
-    bool callback_initialized;
+    PaStream *stream       = nullptr;
+    uint32_t blocksize_    = 0;
+    bool engine_initalised = false;
     cpu_time_info cpu_time_accumulator;
 };
 

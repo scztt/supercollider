@@ -29,7 +29,7 @@
 #include <limits>
 #include <set>
 
-#ifdef SC_WIN32
+#ifdef _WIN32
 # include <direct.h>
 #else
 # include <sys/param.h>
@@ -58,7 +58,7 @@
 #include "PyrKernelProto.h"
 #include "InitAlloc.h"
 #include "PredefinedSymbols.h"
-#ifdef SC_WIN32
+#ifdef _WIN32
 #else
 # include "dirent.h"
 #endif
@@ -103,7 +103,8 @@ int yylen;
 int lexCmdLine = 0;
 bool compilingCmdLine = false;
 bool compilingCmdLineErrorWindow = false;
-long zzval;
+
+intptr_t zzval;
 
 int lineno, charno, linepos;
 int *linestarts;
@@ -182,7 +183,7 @@ static bool getFileText(char* filename, char **text, int *length)
 	char *ltext;
 	int llength;
 
-#ifdef SC_WIN32
+#ifdef _WIN32
 	file = fopen(filename, "rb");
 #else
 	file = fopen(filename, "r");
@@ -193,11 +194,11 @@ static bool getFileText(char* filename, char **text, int *length)
 	llength = ftell(file);
 	fseek(file, 0L, SEEK_SET);
 	ltext = (char*)pyr_pool_compile->Alloc((llength+1) * sizeof(char));
-#ifdef SC_WIN32
+#ifdef _WIN32
 	// win32 isprint( ) doesn't like the 0xcd after the end of file when
 	// there is a mismatch in lengths due to line endings....
 	memset(ltext,0,(llength+1) * sizeof(char));
-#endif //SC_WIN32
+#endif //_WIN32
 	MEMFAIL(ltext);
 
 	size_t size = fread(ltext, 1, llength, file);
@@ -393,7 +394,8 @@ void unput0(int c)
 
 int yylex()
 {
-	int r, c, c2, d;
+	int r, c, c2;
+	intptr_t d;
 	int radix;
     char extPath[MAXPATHLEN]; // for error reporting
 
@@ -422,16 +424,16 @@ start:
 	}
 	else if (c >= '0' && c <= '9') goto digits_1;
 	else if (c == OPENPAREN || c == OPENSQUAR || c == OPENCURLY) {
-		pushls(&brackets, (int)c);
+		pushls(&brackets, (intptr_t)c);
 		if (c == OPENCURLY) {
-			pushls(&closedFuncCharNo, linestarts[lineno] + charno - 1);
+			pushls(&closedFuncCharNo, (intptr_t)(linestarts[lineno] + charno - 1));
 		}
 		r = c;
 		goto leave;
 	}
 	else if (c == CLOSSQUAR) {
 		if (!emptyls(&brackets)) {
-			if ((d = popls(&brackets)) != OPENSQUAR) {
+			if ((d = popls(&brackets)) != (intptr_t) OPENSQUAR) {
 				fatal();
 				post("opening bracket was a '%c', but found a '%c'\n",d,c);
 				goto error2;
@@ -502,8 +504,8 @@ start:
 	}
 	else if (c == '#') {
 		if ((c = input()) == OPENCURLY) {
-			pushls(&brackets, OPENCURLY);
-			pushls(&closedFuncCharNo, linestarts[lineno] + charno - 2);
+			pushls(&brackets, (intptr_t)OPENCURLY);
+			pushls(&closedFuncCharNo, (intptr_t)(linestarts[lineno] + charno - 2));
 			r = BEGINCLOSEDFUNC;
 		} else {
 			unput(c);
@@ -899,7 +901,7 @@ int processbinop(char *token)
 	sym = getsym(token);
 	SetSymbol(&slot, sym);
 	node = newPyrSlotNode(&slot);
-	zzval = (long)node;
+	zzval = (intptr_t)node;
 	if (strcmp(token, "<-")==0) return LEFTARROW;
 	if (strcmp(token, "<>")==0) return READWRITEVAR;
 	if (strcmp(token, "|")==0) return '|';
@@ -926,7 +928,7 @@ int processkeywordbinop(char *token)
 	sym = getsym(token);
 	SetSymbol(&slot, sym);
 	node = newPyrSlotNode(&slot);
-	zzval = (long)node;
+	zzval = (intptr_t)node;
 	return KEYBINOP;
 }
 
@@ -939,7 +941,7 @@ int processident(char *token)
 	PyrParseNode *node;
 
 	c = token[0];
-	zzval = -1;
+	zzval = (intptr_t) -1;
 
 #if DEBUGLEX
 	if (gDebugLexer) postfl("word: '%s'\n",token);
@@ -953,13 +955,13 @@ int processident(char *token)
 	if (token[0] == '_') {
 		if (token[1] == 0) {
 			node = newPyrCurryArgNode();
-			zzval = (long)node;
+			zzval = (intptr_t)node;
 			return CURRYARG;
 		} else {
 			sym = getsym(token);
 			SetSymbol(&slot, sym);
 			node = newPyrSlotNode(&slot);
-			zzval = (long)node;
+			zzval = (intptr_t)node;
 			return PRIMITIVENAME;
 		}
 	}
@@ -967,7 +969,7 @@ int processident(char *token)
 		sym = getsym(token);
 		SetSymbol(&slot, sym);
 		node = newPyrSlotNode(&slot);
-		zzval = (long)node;
+		zzval = (intptr_t)node;
 #if DEBUGLEX
 	if (gDebugLexer) postfl("CLASSNAME: '%s'\n",token);
 #endif
@@ -983,37 +985,37 @@ int processident(char *token)
 		sym = getsym(token);
 		SetSymbol(&slot, sym);
 		node = newPyrSlotNode(&slot);
-		zzval = (long)node;
+		zzval = (intptr_t)node;
 		return WHILE;
 	}
 	if (strcmp("pi",token) ==0) {
 		SetFloat(&slot, pi);
 		node = newPyrSlotNode(&slot);
-		zzval = (long)node;
+		zzval = (intptr_t)node;
 		return PIE;
 	}
 	if (strcmp("true",token) ==0) {
 		SetTrue(&slot);
 		node = newPyrSlotNode(&slot);
-		zzval = (long)node;
+		zzval = (intptr_t)node;
 		return TRUEOBJ;
 	}
 	if (strcmp("false",token) ==0) {
 		SetFalse(&slot);
 		node = newPyrSlotNode(&slot);
-		zzval = (long)node;
+		zzval = (intptr_t)node;
 		return FALSEOBJ;
 	}
 	if (strcmp("nil",token) ==0) {
 		SetNil(&slot);
 		node = newPyrSlotNode(&slot);
-		zzval = (long)node;
+		zzval = (intptr_t)node;
 		return NILOBJ;
 	}
 	if (strcmp("inf",token) ==0) {
 		SetFloat(&slot, std::numeric_limits<double>::infinity());
 		node = newPyrSlotNode(&slot);
-		zzval = (long)node;
+		zzval = (intptr_t)node;
 		return SC_FLOAT;
 	}
 
@@ -1021,7 +1023,7 @@ int processident(char *token)
 
 	SetSymbol(&slot, sym);
 	node = newPyrSlotNode(&slot);
-	zzval = (long)node;
+	zzval = (intptr_t)node;
 	return NAME;
 }
 
@@ -1046,7 +1048,7 @@ int processhex(char *s)
 
 	SetInt(&slot, val);
 	node = newPyrSlotNode(&slot);
-	zzval = (long)node;
+	zzval = (intptr_t)node;
 	return INTEGER;
 }
 
@@ -1061,7 +1063,7 @@ int processintradix(char *s, int n, int radix)
 
 	SetInt(&slot, sc_strtoi(s, n, radix));
 	node = newPyrSlotNode(&slot);
-	zzval = (long)node;
+	zzval = (intptr_t)node;
 	return INTEGER;
 }
 
@@ -1075,7 +1077,7 @@ int processfloatradix(char *s, int n, int radix)
 
 	SetFloat(&slot, sc_strtof(s, n, radix));
 	node = newPyrSlotNode(&slot);
-	zzval = (long)node;
+	zzval = (intptr_t)node;
 	return SC_FLOAT;
 }
 
@@ -1089,7 +1091,7 @@ int processint(char *s)
 
 	SetInt(&slot, atoi(s));
 	node = newPyrSlotNode(&slot);
-	zzval = (long)node;
+	zzval = (intptr_t)node;
 	return INTEGER;
 }
 
@@ -1103,7 +1105,7 @@ int processchar(int c)
 
 	SetChar(&slot, c);
 	node = newPyrSlotNode(&slot);
-	zzval = (long)node;
+	zzval = (intptr_t)node;
 	return ASCII;
 }
 
@@ -1119,7 +1121,7 @@ int processfloat(char *s, int sawpi)
 	if (sawpi) { z = atof(s)*pi; SetFloat(&slot, z); }
 	else  { SetFloat(&slot, atof(s)); }
 	node = newPyrSlotNode(&slot);
-	zzval = (long)node;
+	zzval = (intptr_t)node;
 	return SC_FLOAT;
 }
 
@@ -1159,7 +1161,7 @@ int processaccidental1(char *s)
 
 	SetFloat(&slot, degree + cents/centsdiv);
 	node = newPyrSlotNode(&slot);
-	zzval = (long)node;
+	zzval = (intptr_t)node;
 	return ACCIDENTAL;
 }
 
@@ -1192,7 +1194,7 @@ int processaccidental2(char *s)
 
 	SetFloat(&slot, degree + semitones/10.);
 	node = newPyrSlotNode(&slot);
-	zzval = (long)node;
+	zzval = (intptr_t)node;
 	return ACCIDENTAL;
 }
 
@@ -1208,7 +1210,7 @@ int processsymbol(char *s)
 
 	SetSymbol(&slot, sym);
 	node = newPyrSlotNode(&slot);
-	zzval = (long)node;
+	zzval = (intptr_t)node;
 	return SYMBOL;
 }
 
@@ -1224,7 +1226,7 @@ int processstring(char *s)
 	string = newPyrString(gMainVMGlobals->gc, s+1, flags, false);
 	SetObject(&slot, string);
 	node = newPyrSlotNode(&slot);
-	zzval = (long)node;
+	zzval = (intptr_t)node;
 	return STRING;
 }
 
@@ -1362,7 +1364,8 @@ int pstrcmp(unsigned char *s1, unsigned char *s2)
 
 bool scanForClosingBracket()
 {
-	int r, c, d, startLevel;
+	int r, c, startLevel;
+	intptr_t d;
 	bool res = true;
 	// finite state machine to parse input stream into tokens
 
@@ -1400,7 +1403,7 @@ start:
 		goto start;
 	}
 	else if (c == OPENPAREN || c == OPENSQUAR || c == OPENCURLY) {
-		pushls(&brackets, (int)c);
+		pushls(&brackets, (intptr_t)c);
 		r = c;
 		goto start;
 	}
@@ -1422,7 +1425,7 @@ start:
 	}
 	else if (c == CLOSPAREN) {
 		if (!emptyls(&brackets)) {
-			if ((d = popls(&brackets)) != OPENPAREN) {
+			if ((d = popls(&brackets)) != (intptr_t) OPENPAREN) {
 				fatal();
 				post("opening bracket was a '%c', but found a '%c'\n",d,c);
 				goto error1;
@@ -1777,7 +1780,7 @@ void traverseFullDepTree2()
 			post("\tByte Code Size %d\n", totalByteCodes);
 			//elapsed = TickCount() - compileStartTime;
 			//elapsed = 0;
-			elapsed = elapsedRealTime() - compileStartTime;
+			elapsed = elapsedTime() - compileStartTime;
 			post("\tcompiled %d files in %.2f seconds\n",
 				 gNumCompiledFiles, elapsed );
 			if(numOverwrites == 1){
@@ -1887,6 +1890,7 @@ void pyrmath_init_globs();
 
 void initPassOne()
 {
+	post("initPassOne started\n");
 	aboutToFreeRuntime();
 
 	//dump_pool_histo(pyr_pool_runtime);
@@ -1917,6 +1921,7 @@ void initPassOne()
 	compiledOK = false;
 	compiledDirectories.clear();
 	sc_InitCompileDirectory();
+	post("initPassOne done\n");
 }
 
 void finiPassOne()
@@ -2123,7 +2128,7 @@ void shutdownLibrary()
 	SC_LanguageConfig::freeLibraryConfig();
 }
 
-SC_DLLEXPORT_C bool compileLibrary(bool standalone)
+SCLANG_DLLEXPORT_C bool compileLibrary(bool standalone)
 {
 	//printf("->compileLibrary\n");
 	shutdownLibrary();
@@ -2134,7 +2139,7 @@ SC_DLLEXPORT_C bool compileLibrary(bool standalone)
 
 	SC_LanguageConfig::readLibraryConfig(standalone);
 
-	compileStartTime = elapsedRealTime();
+	compileStartTime = elapsedTime();
 
 	totalByteCodes = 0;
 
@@ -2176,7 +2181,7 @@ void signal_init_globs();
 
 void dumpByteCodes(PyrBlock *theBlock);
 
-SC_DLLEXPORT_C void runLibrary(PyrSymbol* selector)
+SCLANG_DLLEXPORT_C void runLibrary(PyrSymbol* selector)
 {
 	VMGlobals *g = gMainVMGlobals;
 	g->canCallOS = true;

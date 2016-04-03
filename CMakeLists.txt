@@ -4,30 +4,42 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
 	set(LINUX 1)
 endif()
 
-if (LINUX)
-	cmake_minimum_required (VERSION 2.8)
-else()
-	cmake_minimum_required (VERSION 2.8.10)
-endif()
+cmake_minimum_required (VERSION 2.8.12)
 
 include("SCVersion.txt")
 set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}${PROJECT_VERSION_PATCH}")
 message(STATUS "SuperCollider Version: ${PROJECT_VERSION}")
-
+message(STATUS "Building from branch ${GIT_BRANCH}, commit hash is ${GIT_COMMIT_HASH}")
 include(CTest)
 enable_testing()
 
 include (cmake_modules/FinalFile.cmake)
 
-if (NOT CMAKE_BUILD_TYPE)
-	message(STATUS "Build type defaulting to \"RelWithDebInfo\"")
-	set(CMAKE_BUILD_TYPE "RelWithDebInfo")
+if(CMAKE_GENERATOR MATCHES "Visual Studio" OR CMAKE_GENERATOR MATCHES "Xcode")
+	message(STATUS "Please specify the build configuration in the next step")
+else()
+	if (NOT CMAKE_BUILD_TYPE)
+		message(STATUS "Build type defaulting to \"RelWithDebInfo\"")
+		set(CMAKE_BUILD_TYPE "RelWithDebInfo")
+	endif()
 endif()
 
 if (${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 	message(WARNING "WARNING: IN-PLACE BUILDS ARE NOT RECOMMENDED - PLEASE USE A BUILD DIRECTORY")
 endif()
 
+# allows cmake-find modules and Windows installer to identify the right architecture
+if(WIN32)
+    if(CMAKE_CL_64 OR "$ENV{MSYSTEM}" MATCHES "64" OR CMAKE_C_COMPILER MATCHES "64")
+        SET(CMAKE_LIBRARY_ARCHITECTURE "x64" CACHE STRING "Architecture of target system (for 64bit)")
+    else()
+        SET(CMAKE_LIBRARY_ARCHITECTURE "x86" CACHE STRING "Architecture of target system (for 32bit)")
+    endif()
+
+    if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+        SET(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/Install" CACHE STRING "Cmake install path" FORCE)
+    endif()
+endif(WIN32)
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules
                       ${CMAKE_MODULE_PATH})
@@ -50,14 +62,11 @@ if (${CMAKE_COMPILER_IS_GNUCXX})
 
 	add_definitions("-Wreturn-type")
 
-	if(${_gcc_version} VERSION_LESS 4.7)
-		message(FATAL_ERROR "SuperCollider requires at least gcc-4.7 when compiled with gcc.")
+	if(${_gcc_version} VERSION_LESS 4.8)
+		message(FATAL_ERROR "SuperCollider requires at least gcc-4.8 when compiled with gcc.")
 	endif()
 
-#	disabled for now: -ffast-math breaks avx intrinsics and -fsigned-zeros/-fno-associative-math are not available in some versions
-#	if (${_gcc_version} VERSION_GREATER 4.0.99)
-#		add_definitions("-ffast-math -fsigned-zeros -fno-associative-math")
-#	endif()
+	add_definitions("-ffast-math -fsigned-zeros -fno-associative-math")
 
 	if(APPLE)
 		exec_program(${CMAKE_CXX_COMPILER} ARGS --version OUTPUT_VARIABLE _gcc_version_info)
@@ -74,36 +83,38 @@ elseif(${CMAKE_CXX_COMPILER} MATCHES icpc)
 	add_definitions(-Wno-unknown-pragmas)
 	add_definitions(-simd)
 
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
     set(CMAKE_COMPILER_IS_CLANG 1)
-
-else()
-
 endif()
 
 if(APPLE)
-	set_property(DIRECTORY
-		APPEND
-		PROPERTY COMPILE_DEFINITIONS SC_DARWIN)
-elseif(CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "FreeBSD" OR CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
+	if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+		set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/Install" CACHE STRING "Cmake install path")
+	endif()
+elseif(UNIX)
 	add_definitions(-DSC_DATA_DIR="${CMAKE_INSTALL_PREFIX}/share/SuperCollider")
 endif()
 
 if(WIN32)
-    set_property(DIRECTORY
-                 APPEND
-                 PROPERTY COMPILE_DEFINITIONS SC_WIN32 NOMINMAX _WIN32_WINNT=0x0500)
+    add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX -D_WIN32_WINNT=0x0500)
 
-    add_definitions(-DWIN32_LEAN_AND_MEAN)
-
-    # correctly link the static Boost Thread library:
-    add_definitions(-DBOOST_THREAD_USE_LIB)
-	#avoid unnecesary autolink
-	add_definitions(-DBOOST_DATE_TIME_NO_LIB -DBOOST_ALL_NO_LIB)
+    #avoid unnecesary autolink
+    add_definitions(-DBOOST_DATE_TIME_NO_LIB -DBOOST_ALL_NO_LIB)
 
 endif()
 
-add_definitions(-DBOOST_CHRONO_HEADER_ONLY)
+add_definitions(-DBOOST_CHRONO_HEADER_ONLY -DBOOST_NO_AUTO_PTR)
+
+
+#############################################
+# Detect CCache
+
+find_program(CCacheExectuable ccache)
+if( CCacheExectuable )
+  # only used with >=cmake-3.4
+  set( CMAKE_C_COMPILER_LAUNCHER   "${CCacheExectuable}" )
+  set( CMAKE_CXX_COMPILER_LAUNCHER "${CCacheExectuable}" )
+endif()
 
 #############################################
 # Options
@@ -112,18 +123,17 @@ option(FINAL_BUILD "Build as single source file." OFF)
 
 option(FFT_GREEN "Use internal 'Green' FFT lib rather than FFTW. (Not recommended.)" OFF)
 
-option(SSE "Compile with support for SSE instructions." ON)
-option(SSE2 "Compile with support for SSE2 instructions." ON)
+if(NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "^arm")
+    option(SSE "Compile with support for SSE instructions." ON)
+    option(SSE2 "Compile with support for SSE2 instructions." ON)
+else() # ARM platforms do not have SSE
+    set(SSE OFF)
+    set(SSE2 OFF)
+endif()
 
 set(AUDIOAPI "default" CACHE STRING "Audio API to use (one of {default,coreaudio,jack,portaudio})")
 
-if(NOT WIN32)
-	option(LIBSCSYNTH "Compile libscsynth as shared library" OFF)
-else()
-	# libscsynth has unresolved symbols, which are resolved when linked with server executable.
-	# On Windows, this is not supported for static libraries, so we build dynamic by default.
-	option(LIBSCSYNTH "Compile libscsynth as shared library" ON)
-endif()
+option(LIBSCSYNTH "Compile libscsynth as shared library" OFF)
 
 option(INSTALL_HELP "Install help docs and examples along with the software" ON)
 option(SC_DOC_RENDER "Pre-render SCDoc documentation. (For putting online, etc)" OFF)
@@ -143,7 +153,7 @@ option(ENABLE_TESTSUITE "Compile testsuite." ON)
 
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")
     option(SUPERNOVA "Build with supernova as optional audio synthesis server" ON)
-elseif()
+else()
     option(SUPERNOVA "Build with supernova as optional audio synthesis server" OFF)
 endif()
 
@@ -170,7 +180,7 @@ endif()
 option(SC_SYMLINK_CLASSLIB "Place a symlink of SCCLassLibrary instead of copying" OFF)
 
 option(SYSTEM_BOOST   "Use boost libraries from system" OFF)
-option(SYSTEM_YAMLCPP "Use yaml-cpp library from system" ON)
+option(SYSTEM_YAMLCPP "Use yaml-cpp library from system" OFF)
 
 option(FORTIFY "Define -D_FORTIFY_SOURCE=2 to check for programming errors" OFF)
 
@@ -186,11 +196,6 @@ if (NOT WIN32)
     include_directories(${PTHREADS_INCLUDE_DIR})
 endif()
 
-if(MSVC OR MINGW)
-    set(MATH_LIBRARY "")
-else()
-    find_library(MATH_LIBRARY m)
-endif()
 
 if(SYSTEM_BOOST)
   set(Boost_USE_MULTITHREADED      ON)
@@ -296,12 +301,25 @@ endif()
 configure_file(common/SC_Version.hpp.in common/SC_Version.hpp)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/common)
 
+file(GLOB_RECURSE ClassLibrary SCClassLibrary/*sc)
+file(GLOB_RECURSE HelpSource   HelpSource/*)
+file(GLOB_RECURSE Sounds       sounds/*)
+file(GLOB_RECURSE Examples     examples/*)
+
+
+if(APPLE)
+  include(cmake_modules/MacAppFolder.cmake)
+  set(ide_name ${scappbundlename})
+else()
+  set(ide_name scide)
+endif()
+
 add_subdirectory(server)
 add_subdirectory(lang)
-add_subdirectory(editors)
 add_subdirectory(platform)
+add_subdirectory(editors)
 
-if(CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+if(UNIX AND NOT APPLE)
     install(DIRECTORY include/common include/plugin_interface include/server include/lang
         DESTINATION ${CMAKE_INSTALL_PREFIX}/include/SuperCollider
 	FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
@@ -311,18 +329,10 @@ if(CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
     )
 endif()
 
-if(APPLE)
-	# determines the app name and app install location (scappbundlename, scappdir):
-	include (cmake_modules/MacAppFolder.cmake)
-
-	set(auxresourcesdir ${scappauxresourcesdir})
-
-	# Some aux files which go in the app's folder
-	install(FILES README.md README_OS_X.md ChangeLog COPYING AUTHORS MOVED_STUFF.txt
-		DESTINATION ${scappbundlename}
-	)
-elseif (WIN32)
+if (WIN32)
 	set(auxresourcesdir "SuperCollider")
+elseif(APPLE)
+	set(auxresourcesdir ${scappbundlename})
 else()
 	set(auxresourcesdir "share/SuperCollider")
 endif()
@@ -360,24 +370,6 @@ if(APPLE)
 					"EXECUTE_PROCESS(COMMAND ln -shF ${CMAKE_CURRENT_SOURCE_DIR}/SCClassLibrary/${onedirectory} ${CMAKE_INSTALL_PREFIX}/${auxresourcesdir}/SCClassLibrary/${onedirectory} )" )
 			endif()
 		endforeach(onedirectory)
-	else()
-		message(STATUS "Will copy SCCLassLibrary to ${CMAKE_INSTALL_PREFIX}/${auxresourcesdir}")
-
-		#if directory contains symlinks, unlink them.
-		if(EXISTS "${CMAKE_INSTALL_PREFIX}/${auxresourcesdir}/SCClassLibrary")
-			file(GLOB classlibraryfolders "${CMAKE_INSTALL_PREFIX}/${auxresourcesdir}/SCClassLibrary/[^.]*")
-			foreach(onedirectory ${classlibraryfolders})
-				if(IS_SYMLINK "${onedirectory}")
-					message(STATUS "Unlinking ${onedirectory}")
-					install( CODE "EXECUTE_PROCESS(COMMAND unlink ${onedirectory} )" )
-				endif()
-			endforeach(onedirectory)
-		endif()
-
-		install(DIRECTORY SCClassLibrary
-			DESTINATION ${auxresourcesdir}
-			REGEX ${SCCLASSLIB_EXCLUDE_REGEX} EXCLUDE
-		)
 	endif()
 else()
 	install(DIRECTORY SCClassLibrary
@@ -388,21 +380,40 @@ else()
 	)
 endif()
 
-install(DIRECTORY sounds
-	DESTINATION ${auxresourcesdir}
-)
-
-if(APPLE AND ("${standalone}" STREQUAL ""))
-	set(exampledir "${scappbundlename}")
-else()
-	set(exampledir "${auxresourcesdir}")
+if(NOT APPLE)
+	install(DIRECTORY sounds   DESTINATION ${auxresourcesdir})
+	install(DIRECTORY examples DESTINATION ${auxresourcesdir})
+elseif(APPLE)
+	install(DIRECTORY examples DESTINATION ${auxresourcesdir})
 endif()
 
-install(DIRECTORY examples
-	DESTINATION ${exampledir}
-	PATTERN "*~" EXCLUDE
-	PATTERN "*#" EXCLUDE
-)
+if (WIN32)
+	set( AdditionalInstallFiles
+		README.md
+		README_WINDOWS.md
+		CHANGELOG.md
+		COPYING
+		AUTHORS
+	)
+elseif(APPLE)
+	set( AdditionalInstallFiles
+		README.md
+		README_OS_X.md
+		CHANGELOG.md
+		COPYING
+		AUTHORS
+	)
+else()
+	set( AdditionalInstallFiles
+		README.md
+		README_LINUX.md
+		CHANGELOG.md
+		COPYING
+		AUTHORS
+	)
+endif()
+
+install(FILES ${AdditionalInstallFiles} DESTINATION ${auxresourcesdir})
 
 if(INSTALL_HELP)
 	if(SC_SYMLINK_CLASSLIB AND APPLE)
@@ -412,32 +423,25 @@ if(INSTALL_HELP)
 		endif()
 		install( CODE
 					"EXECUTE_PROCESS(COMMAND ln -shF ${CMAKE_CURRENT_SOURCE_DIR}/HelpSource ${CMAKE_INSTALL_PREFIX}/${auxresourcesdir}/HelpSource )" )
-	else()
-		message(STATUS "Will copy HelpSource to ${CMAKE_INSTALL_PREFIX}/${auxresourcesdir}")
-		if(APPLE)
-			if(EXISTS "${CMAKE_INSTALL_PREFIX}/${auxresourcesdir}/HelpSource")
-				if(IS_SYMLINK "${CMAKE_INSTALL_PREFIX}/${auxresourcesdir}/HelpSource")
-					message(STATUS "Unlinking ${CMAKE_INSTALL_PREFIX}/${auxresourcesdir}/HelpSource")
-					install( CODE "EXECUTE_PROCESS(COMMAND unlink ${CMAKE_INSTALL_PREFIX}/${auxresourcesdir}/HelpSource )" )
-				endif()
-			endif()
-		endif()
+	elseif(NOT APPLE)
 		install(DIRECTORY HelpSource
 			DESTINATION ${auxresourcesdir}
+			REGEX ${SCCLASSLIB_EXCLUDE_REGEX} EXCLUDE
+			PATTERN "*~" EXCLUDE
+			PATTERN "*#" EXCLUDE
+		)
+	endif()
+
+	if(NOT APPLE)
+		install(DIRECTORY HelpSource
+			DESTINATION ${auxresourcesdir}
+			REGEX ${SCCLASSLIB_EXCLUDE_REGEX} EXCLUDE
 			PATTERN "*~" EXCLUDE
 			PATTERN "*#" EXCLUDE
 		)
 	endif()
 endif()
 
-
-#hid resources directory:
-set(HID_HUT_PATH ${auxresourcesdir}/SCClassLibrary/Common/Control/HID_support)
-
-install(DIRECTORY external_libraries/hidapi/hut
-        DESTINATION ${HID_HUT_PATH}
-	FILES_MATCHING PATTERN "*.yaml"
-)
 
 #############################################
 #

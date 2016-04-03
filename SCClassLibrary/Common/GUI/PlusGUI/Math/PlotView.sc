@@ -319,7 +319,7 @@ Plot {
 	}
 
 	getRelativePositionX { |x|
-		^domainSpec.map((x - plotBounds.left) / plotBounds.width)
+		^this.resampledDomainSpec.map((x - plotBounds.left) / plotBounds.width)
 	}
 
 	getRelativePositionY { |y|
@@ -656,7 +656,6 @@ Plotter {
 				var list = data.at(i);
 				if(list.notNil) {
 					spec = spec.looseRange(list, defaultRange, *ranges.wrapAt(i));
-					spec.postcs;
 				} {
 					spec
 				};
@@ -677,7 +676,9 @@ Plotter {
 
 	// interaction
 	pointIsInWhichPlot { |point|
-		var res = plots.detectIndex { |plot|
+		var res;
+		if(plots.isNil) { ^nil };
+		res = plots.detectIndex { |plot|
 			point.y.exclusivelyBetween(plot.bounds.top, plot.bounds.bottom)
 		};
 		^res ?? {
@@ -813,6 +814,7 @@ Plotter {
 		var name = this.asCompileString, plotter;
 		if(name.size > 50 or: { name.includes(Char.nl) }) { name = "function plot" };
 		plotter = Plotter(name, bounds);
+		plotter.value = [0.0];
 		server = server ? Server.default;
 		server.waitForBoot {
 			this.loadToFloatArray(duration, server, { |array, buf|
@@ -832,6 +834,19 @@ Plotter {
 			})
 		};
 		^plotter
+	}
+
+	plotAudio { |duration = 0.01, minval = -1, maxval = 1, server, bounds|
+		^this.plot(duration, server, bounds, minval, maxval)
+	}
+}
+
++ Bus {
+	plot { |duration = 0.01, bounds, minval, maxval, separately = false|
+		^{ InFeedback.ar(this.index, this.numChannels) }.plot(duration, this.server, bounds, minval, maxval, separately)
+	}
+	plotAudio { |duration = 0.01, minval = -1, maxval = 1, bounds|
+		^this.plot(duration, bounds, minval, maxval)
 	}
 }
 
@@ -867,6 +882,7 @@ Plotter {
 		^plotter
 	}
 }
+
 
 + Env {
 	plot { |size = 400, bounds, minval, maxval, name|

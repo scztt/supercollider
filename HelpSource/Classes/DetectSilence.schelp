@@ -5,10 +5,16 @@ categories::  UGens>Synth control, UGens>Analysis>Amplitude
 
 Description::
 
-When input falls below a threshhold, evaluate doneAction. If the input
-signal starts with silence at the beginning of the synth's duration, then
-DetectSilence will wait indefinitely until the first sound before
-starting to monitor for silence.
+When input falls below a threshhold, evaluate doneAction.
+
+code::
+// this frees after the Decay has become quiet enough for a long enough time
+{ var signal = Decay.ar(Impulse.ar(0), 2, PinkNoise.ar(0.2)); DetectSilence.ar(signal, doneAction:2); signal }.play;
+::
+
+note::
+If the input signal starts with silence at the beginning of the synth's duration, then DetectSilence will wait indefinitely until the first sound before starting to monitor for silence. To avoid a hanging silent sound where the input may remain zero, you can add an envelope to its input
+::
 
 
 classmethods::
@@ -22,7 +28,7 @@ The input signal.
 
 argument::amp
 
-When input falls below this, evaluate
+When input falls below this for long enough, evaluate
 
 code::doneAction:: .
 
@@ -48,22 +54,23 @@ Examples::
 code::
 
 (
-SynthDef("detectSilence-help", { arg out;
+SynthDef("detectSilence-help", { arg out;
 	var z;
-	z = SinOsc.ar(Rand(400, 700), 0, LFNoise2.kr(8, 0.2).max(0));
+	z = SinOsc.ar(Rand(400, 700), 0, LFDNoise3.kr(8).max(0)).softclip * 0.3;
 	DetectSilence.ar(z, doneAction:2);
 	Out.ar(out, z);
-}).send(s);
+}).add;
 )
 
-s.sendMsg("/s_new", "detectSilence-help", -1);
-s.sendMsg("/s_new", "detectSilence-help", -1);
-s.sendMsg("/s_new", "detectSilence-help", -1);
+Synth("detectSilence-help");
+Synth("detectSilence-help");
+Synth("detectSilence-help");
+
 
 (
 Task({
 	loop({
-		s.sendMsg("/s_new", "detectSilence-help", -1);
+		Synth("detectSilence-help");
 		[0.5, 1].choose.wait;
 	})
 }).play;

@@ -93,6 +93,7 @@ private:
     void createActions( Settings::Manager * );
     void updateActionShortcuts( Settings::Manager * );
     void zoomFont(int steps);
+    QTextCharFormat formatForPostLine(QStringRef line);
 
     QAction * mActions[ActionCount];
     /*
@@ -100,6 +101,8 @@ private:
     QAction * mClearAction;
     QAction * mLineWrapAction;*/
     QSize mSizeHint;
+    QChar previousChar;
+    QTextCharFormat currentFormat;
 };
 
 

@@ -1,22 +1,20 @@
 find_package(Sndfile)
-if (WIN32)
-	find_package(Portaudio)
-endif()
 
-if(NOVA_SIMD)
-	add_definitions(-DNOVA_SIMD)
-endif()
-
-if (NO_AVAHI)
-
-elseif (APPLE)
-	add_definitions(-DUSE_RENDEZVOUS=1)
-else()
-	find_package(Avahi)
-	if (AVAHI_FOUND)
-		add_definitions(-DUSE_RENDEZVOUS=1)
-	endif()
-endif()
+if(WIN32 AND NOT MSYS)
+	if(NOT SC_BUILD_PA)
+		add_library(portaudio ${PA_LIBRARY_TYPE} IMPORTED GLOBAL)
+		if(MSVC)
+			set_target_properties(portaudio PROPERTIES
+				IMPORTED_LOCATION_DEBUG   ${PORTAUDIO_LIBRARY_DEBUG}
+				IMPORTED_LOCATION         ${PORTAUDIO_LIBRARY_RELEASE}
+			)
+		else(MSVC)
+			set_target_properties(portaudio PROPERTIES
+				IMPORTED_LOCATION         ${PORTAUDIO_LIBRARIES}
+			)
+		endif(MSVC)
+	endif(NOT SC_BUILD_PA)
+endif(WIN32 AND NOT MSYS)
 
 # Here we work out which audio API to use, from system type and/or user option.
 if(AUDIOAPI STREQUAL "default")
@@ -30,7 +28,7 @@ if(AUDIOAPI STREQUAL "default")
 endif()
 
 if(NOT AUDIOAPI MATCHES "^(jack|coreaudio|portaudio)$")
-	message(WARNING "Unrecognised audio API: ${AUDIOAPI}")
+	message(FATAL_ERROR "Unrecognised audio API: ${AUDIOAPI}")
 endif()
 
 if(AUDIOAPI STREQUAL jack)
@@ -38,11 +36,11 @@ if(AUDIOAPI STREQUAL jack)
 	if(NOT JACK_FOUND)
 		message(FATAL_ERROR "Jack selected as audio API, but development files not found")
 	endif()
-elseif(AUDIOAPI STREQUAL portaudio)
-	find_package(Portaudio)
-	if(NOT PORTAUDIO_FOUND)
-		message(FATAL_ERROR "Portaudio selected as audio API, but development files not found")
-	endif()
+elseif(AUDIOAPI STREQUAL portaudio AND NOT WIN32)
+		find_package(Portaudio)
+		if(NOT PORTAUDIO_FOUND)
+			message(FATAL_ERROR "Portaudio selected as audio API, but development files not found")
+		endif()
 endif()
 message(STATUS "Audio API: ${AUDIOAPI}")
 
@@ -58,6 +56,7 @@ set(scsynth_sources
 	SC_Graph.cpp
 	SC_GraphDef.cpp
 	SC_Group.cpp
+	SC_HiddenWorld.h
 	SC_Lib_Cintf.cpp
 	SC_Lib.cpp
 	SC_MiscCmds.cpp
@@ -81,24 +80,26 @@ set(scsynth_sources
 	${CMAKE_SOURCE_DIR}/common/Samp.cpp
 	${CMAKE_SOURCE_DIR}/common/sc_popen.cpp
 
-	${CMAKE_SOURCE_DIR}/external_libraries/TLSF-2.4.6/src/tlsf.c
 	${boost_system_sources}
 )
 
 if(APPLE)
 	set_property(SOURCE ${CMAKE_SOURCE_DIR}/common/SC_DirUtils.cpp PROPERTY COMPILE_FLAGS -xobjective-c++)
+
+	list(APPEND scsynth_sources
+		${CMAKE_SOURCE_DIR}/common/SC_Apple.mm
+	)
+	set_source_files_properties( ${CMAKE_SOURCE_DIR}/common/SC_Apple.mm
+	    PROPERTIES COMPILE_FLAGS "-x objective-c++ -fobjc-exceptions"
+	)
 endif()
 
 if(WIN32)
-    list(APPEND scsynth_sources ${CMAKE_SOURCE_DIR}/common/SC_Win32Utils.cpp)
+	list(APPEND scsynth_sources ${CMAKE_SOURCE_DIR}/common/SC_Win32Utils.cpp)
 endif()
 
 if (FFT_GREEN)
 	list(APPEND scsynth_sources ../../common/fftlib.c)
-endif()
-
-if (FFTW3F_FOUND)
-	include_directories (${FFTW3F_INCLUDE_DIR})
 endif()
 
 
@@ -109,11 +110,7 @@ include_directories(${CMAKE_SOURCE_DIR}/include/common
                     .
 )
 
-include_directories (${CMAKE_SOURCE_DIR}/external_libraries/TLSF-2.4.6/src)
-
-set_property(DIRECTORY
-             APPEND
-             PROPERTY COMPILE_DEFINITIONS SC_MEMORY_ALIGNMENT=32)
+include_directories (${CMAKE_SOURCE_DIR}/external_libraries/boost_sync/include)
 
 if (AUDIOAPI STREQUAL jack)
 	list(APPEND scsynth_sources SC_Jack.cpp)
@@ -142,52 +139,76 @@ else()
 	add_library(libscsynth ${LIBSCSYNTH_TYPE} ${scsynth_sources} ${all_headers})
 endif()
 
-set_property(TARGET libscsynth
-	APPEND
-	PROPERTY COMPILE_DEFINITIONS BUILDING_SUPERCOLLIDER)
+
+if(LIBSCSYNTH)
+        target_compile_definitions(libscsynth PRIVATE   BUILDING_SCSYNTH)
+        target_compile_definitions(libscsynth INTERFACE BUILDING_SCSYNTH)
+endif()
+
+target_compile_definitions(libscsynth PUBLIC  SC_MEMORY_ALIGNMENT=32)
+
+target_link_libraries(libscsynth tlsf)
 
 find_library(DL NAMES dl)
-if (DL)
+if(DL)
     target_link_libraries(libscsynth ${DL})
 endif()
 
-if(AVAHI_FOUND)
-	add_definitions("-DHAVE_AVAHI=1")
-	include_directories(${AVAHI_INCLUDE_DIRS})
-	target_link_libraries(libscsynth ${AVAHI_LIBRARIES})
+if(NOVA_SIMD)
+	target_compile_definitions(libscsynth PUBLIC NOVA_SIMD)
 endif()
 
 if(SNDFILE_FOUND)
-	include_directories(${SNDFILE_INCLUDE_DIR})
 	target_link_libraries(libscsynth ${SNDFILE_LIBRARIES})
+	target_include_directories(libscsynth PUBLIC ${SNDFILE_INCLUDE_DIR})
 elseif(NOT NO_LIBSNDFILE)
 	message(SEND_ERROR "Cannot find libsndfile")
 endif(SNDFILE_FOUND)
 
-if(CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "FreeBSD" OR CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
-	add_definitions(-DSC_PLUGIN_DIR="${CMAKE_INSTALL_PREFIX}/lib/SuperCollider/plugins")
+if(UNIX AND NOT APPLE)
+	target_compile_definitions(libscsynth PUBLIC "SC_PLUGIN_DIR=\"${CMAKE_INSTALL_PREFIX}/lib/SuperCollider/plugins\"")
 endif()
+
+
+if(NOT NO_AVAHI)
+	if(APPLE)
+		target_compile_definitions(libscsynth PUBLIC USE_RENDEZVOUS=1)
+	else()
+		find_package(Avahi)
+		if(AVAHI_FOUND)
+			target_compile_definitions(libscsynth PUBLIC USE_RENDEZVOUS=1 HAVE_AVAHI=1)
+			target_link_libraries(libscsynth ${AVAHI_LIBRARIES})
+			target_include_directories(libscsynth PUBLIC ${AVAHI_INCLUDE_DIRS})
+		endif()
+	endif()
+endif()
+
 
 if (AUDIOAPI STREQUAL jack)
 	target_link_libraries(libscsynth ${JACK_LIBRARIES})
 elseif(AUDIOAPI STREQUAL portaudio)
-	target_link_libraries(libscsynth ${PORTAUDIO_LIBRARIES})
+	if(WIN32 AND NOT MSYS)
+		target_link_libraries(libscsynth portaudio)
+	else()
+		target_link_libraries(libscsynth ${PORTAUDIO_LIBRARIES})
+	endif()
 elseif(AUDIOAPI STREQUAL coreaudio)
 	target_link_libraries(libscsynth "-framework CoreAudio")
 endif()
 
 if (Boost_FOUND)
-	target_link_libraries(libscsynth ${Boost_THREAD_LIBRARY} ${Boost_SYSTEM_LIBRARY})
+	target_link_libraries(libscsynth ${Boost_SYSTEM_LIBRARY})
 else()
-        target_link_libraries(libscsynth boost_thread boost_system)
+	target_link_libraries(libscsynth boost_system)
 endif()
 
 if (WIN32)
 	target_link_libraries(libscsynth wsock32 ws2_32 winmm)
 endif()
 
-
+if(NOT WIN32)
 set_property(TARGET libscsynth PROPERTY OUTPUT_NAME scsynth)
+endif()
 
 if (LIBSCSYNTH)
 	# These two properties are ABI version info, not sc version:
@@ -196,6 +217,7 @@ if (LIBSCSYNTH)
 endif()
 
 if (FFTW3F_FOUND)
+	target_include_directories(libscsynth PUBLIC ${FFTW3F_INCLUDE_DIR})
 	target_link_libraries(libscsynth ${FFTW3F_LIBRARY})
 endif()
 
@@ -232,17 +254,13 @@ else()
 endif()
 
 if(APPLE)
-	# TODO allow apple users to install to fhs-ish path if INSTALL_FHS option is enabled
-	# determines the app name and app install location (scappbundlename, scappdir):
-	include (${CMAKE_SOURCE_DIR}/cmake_modules/MacAppFolder.cmake)
-	install(TARGETS ${INSTALL_TARGETS}
-			RUNTIME DESTINATION "${scappbindir}"
-			LIBRARY DESTINATION "${scappauxresourcesdir}"
-			PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE OWNER_WRITE)
+	add_custom_command(TARGET scsynth POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:SuperCollider>/../Resources/
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:scsynth> $<TARGET_FILE_DIR:SuperCollider>/../Resources)
 elseif(WIN32)
-	install(TARGETS ${INSTALL_TARGETS}
-			DESTINATION "SuperCollider"
-			PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+    install(TARGETS ${INSTALL_TARGETS}
+        DESTINATION "SuperCollider"
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 else()
 	install(TARGETS ${INSTALL_TARGETS}
 			RUNTIME DESTINATION "bin"

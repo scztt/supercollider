@@ -49,7 +49,7 @@
 #include "SC_DirUtils.h"
 #include "SC_Version.hpp"
 
-#ifdef SC_WIN32
+#ifdef _WIN32
 # include <direct.h>
 #else
 # include <sys/param.h>
@@ -109,7 +109,7 @@ int slotStrLen(PyrSlot *slot)
 	if (isKindOfSlot(slot, class_string))
 		return slotRawObject(slot)->size;
 
-        return -1;
+	return -1;
 }
 
 int slotStrVal(PyrSlot *slot, char *str, int maxlen)
@@ -2110,7 +2110,7 @@ struct DebugFrameConstructor
 
 private:
 	void run_queue(VMGlobals *g)
-  {
+	{
 		while (!workQueue.empty()) {
 			WorkQueueItem work = workQueue.back();
 			workQueue.pop_back();
@@ -2123,58 +2123,52 @@ private:
 		PyrMethod *meth = slotRawMethod(&frame->method);
 		PyrMethodRaw * methraw = METHRAW(meth);
 
-    /*
-     DebugFrame {
-			var <functionDef, <args, <vars, <caller, <context, <address, <line, <character;
-     }
-     */
-	
-    PyrObject* debugFrameObj = instantiateObject(g->gc, getsym("DebugFrame")->u.classobj, 0, false, true);
-    SetObject(outSlot, debugFrameObj);
+		PyrObject* debugFrameObj = instantiateObject(g->gc, getsym("DebugFrame")->u.classobj, 0, false, false);
+		SetObject(outSlot, debugFrameObj);
 
-    SetObject(debugFrameObj->slots + 0, meth);
-    SetPtr(debugFrameObj->slots + 5, meth);
+		SetObject(debugFrameObj->slots + 0, meth);
+		SetPtr(debugFrameObj->slots + 5, meth);
 
-    int numargs = methraw->numargs;
-    int numvars = methraw->numvars;
-    if (numargs) {
-      PyrObject* argArray = (PyrObject*)newPyrArray(g->gc, numargs, 0, false);
-      SetObject(debugFrameObj->slots + 1, argArray);
-        for (int i=0; i<numargs; ++i)
-        slotCopy(&argArray->slots[i],&frame->vars[i]);
+		int numargs = methraw->numargs;
+		int numvars = methraw->numvars;
+		if (numargs) {
+			PyrObject* argArray = (PyrObject*)newPyrArray(g->gc, numargs, 0, false);
+			SetObject(debugFrameObj->slots + 1, argArray);
+			for (int i=0; i<numargs; ++i)
+				slotCopy(&argArray->slots[i], &frame->vars[i]);
 
-      argArray->size = numargs;
-    } else
-      SetNil(debugFrameObj->slots + 1);
+			argArray->size = numargs;
+		} else
+			SetNil(debugFrameObj->slots + 1);
 
-    if (numvars) {
-      PyrObject* varArray = (PyrObject*)newPyrArray(g->gc, numvars, 0, false);
-      SetObject(debugFrameObj->slots + 2, varArray);
-        for (int i=0, j=numargs; i<numvars; ++i,++j)
-        slotCopy(&varArray->slots[i],&frame->vars[j]);
+		if (numvars) {
+			PyrObject* varArray = (PyrObject*)newPyrArray(g->gc, numvars, 0, false);
+			SetObject(debugFrameObj->slots + 2, varArray);
+			for (int i=0, j=numargs; i<numvars; ++i,++j)
+				slotCopy(&varArray->slots[i], &frame->vars[j]);
 
-      varArray->size = numvars;
-    } else
-      SetNil(debugFrameObj->slots + 2);
+			varArray->size = numvars;
+		} else
+			SetNil(debugFrameObj->slots + 2);
 
 		if (slotRawFrame(&frame->caller)) {
 			WorkQueueItem newWork = std::make_pair(slotRawFrame(&frame->caller), debugFrameObj->slots + 3);
 			workQueue.push_back(newWork);
 		} else
-      SetNil(debugFrameObj->slots + 3);
+			SetNil(debugFrameObj->slots + 3);
 
 		if (IsObj(&frame->context) && slotRawFrame(&frame->context) == frame)
-      SetObject(debugFrameObj->slots + 4,  debugFrameObj);
+			SetObject(debugFrameObj->slots + 4, debugFrameObj);
 		else if (NotNil(&frame->context)) {
 			WorkQueueItem newWork = std::make_pair(slotRawFrame(&frame->context), debugFrameObj->slots + 4);
 			workQueue.push_back(newWork);
 		} else
-      SetNil(debugFrameObj->slots + 4);
+			SetNil(debugFrameObj->slots + 4);
     
     SetInt( debugFrameObj->slots + 6, frame->line.u.i );
     SetInt( debugFrameObj->slots + 7, frame->character.u.i );
 	}
-	
+
 
 	typedef std::pair<PyrFrame*, PyrSlot*> WorkQueueItem;
 	typedef std::vector<WorkQueueItem> WorkQueueType;
@@ -2885,10 +2879,10 @@ void switchToThread(VMGlobals *g, PyrThread *newthread, int oldstate, int *numAr
 	//gcDumpInfo(g->gc);
 	gc = g->gc;
 
-        // save environment in oldthread
-        PyrSlot* currentEnvironmentSlot = &g->classvars->slots[1];
-        slotCopy(&oldthread->environment,currentEnvironmentSlot);
-        gc->GCWrite(oldthread, currentEnvironmentSlot);
+	// save environment in oldthread
+	PyrSlot* currentEnvironmentSlot = &g->classvars->slots[1];
+	slotCopy(&oldthread->environment,currentEnvironmentSlot);
+	gc->GCWrite(oldthread, currentEnvironmentSlot);
 
 	SetRaw(&oldthread->state, oldstate);
 
@@ -3007,19 +3001,19 @@ void switchToThread(VMGlobals *g, PyrThread *newthread, int oldstate, int *numAr
 }
 
 void initPyrThread(VMGlobals *g, PyrThread *thread, PyrSlot *func, int stacksize, PyrInt32Array* rgenArray,
-	double beats, double seconds, PyrSlot* clock, bool collect);
+	double beats, double seconds, PyrSlot* clock, bool runGC);
 void initPyrThread(VMGlobals *g, PyrThread *thread, PyrSlot *func, int stacksize, PyrInt32Array* rgenArray,
-	double beats, double seconds, PyrSlot* clock, bool collect)
+	double beats, double seconds, PyrSlot* clock, bool runGC)
 {
 	PyrObject *array;
 	PyrGC* gc = g->gc;
 
-	slotCopy(&thread->func,func);
+	slotCopy(&thread->func, func);
 	gc->GCWrite(thread, func);
 
-	array = newPyrArray(gc, stacksize, 0, collect);
+	array = newPyrArray(gc, stacksize, 0, runGC);
 	SetObject(&thread->stack, array);
-	gc->GCWrite(thread, array);
+	gc->GCWriteNew(thread, array); // we know array is white so we can use GCWriteNew
 
 	SetInt(&thread->state, tInit);
 
@@ -3033,7 +3027,7 @@ void initPyrThread(VMGlobals *g, PyrThread *thread, PyrSlot *func, int stacksize
 	SetFloat(&thread->seconds, seconds);
 	SetInt(&thread->numArgsPushed, 0);
 	SetInt(&thread->numpop, 0);
-	
+
 	
 	SetBool(&thread->debugging, false);
 	SetFalse(&thread->dContinue);
@@ -3046,13 +3040,13 @@ void initPyrThread(VMGlobals *g, PyrThread *thread, PyrSlot *func, int stacksize
 	}
 
 	PyrSlot* currentEnvironmentSlot = &g->classvars->slots[1];
-        slotCopy(&thread->environment,currentEnvironmentSlot);
-        gc->GCWrite(thread, currentEnvironmentSlot);
+	slotCopy(&thread->environment,currentEnvironmentSlot);
+	gc->GCWrite(thread, currentEnvironmentSlot);
 
 	if(g->process) { // check we're not just starting up
 		slotCopy(&thread->executingPath,&g->process->nowExecutingPath);
 		gc->GCWrite(thread, &g->process->nowExecutingPath);
-}
+	}
 
 	SetInt(&thread->stackSize, stacksize);
 }
@@ -3071,7 +3065,7 @@ int prThreadInit(struct VMGlobals *g, int numArgsPushed)
 	//CallStackSanity(g, "prThreadInit");
 	a = g->sp - 2;	// thread
 	b = g->sp - 1;	// function
-	c = g->sp;		// stacksize
+	c = g->sp;	// stacksize
 
 	thread = slotRawThread(a);
 
@@ -3150,7 +3144,7 @@ int prThreadRandSeed(struct VMGlobals *g, int numArgsPushed)
 		g->rgen = (RGen*)(rgenArray->i);
 	}
 	SetObject(&thread->randData, rgenArray);
-	g->gc->GCWrite(thread, rgenArray);
+	g->gc->GCWriteNew(thread, rgenArray); // we know rgenArray is white so we can use GCWriteNew
 
 	return errNone;
 }
@@ -3253,7 +3247,7 @@ int prRoutineDebugBreak(struct VMGlobals *g, int numArgsPushed);
 int prRoutineDebugBreak(struct VMGlobals *g, int numArgsPushed)
 {
 	PyrSlot value;
-	
+
 	slotCopy(&value,&g->receiver);
 	
 	if (!isKindOf((PyrObject*)g->thread, class_routine)) {
@@ -3366,7 +3360,7 @@ int prRoutineResume(struct VMGlobals *g, int numArgsPushed)
 
 		slotCopy(&thread->beats, &g->thread->beats);
 		slotCopy(&thread->seconds, &g->thread->seconds);
-		slotCopy(&thread->clock,&g->thread->clock);
+		slotCopy(&thread->clock, &g->thread->clock);
 		g->gc->GCWrite(thread, &g->thread->beats);
 		g->gc->GCWrite(thread, &g->thread->seconds);
 		g->gc->GCWrite(thread, &g->thread->clock);
@@ -3598,10 +3592,13 @@ static int prLanguageConfig_getLibraryPaths(struct VMGlobals * g, int numArgsPus
 	size_t numberOfPaths = dirVector.size();
 	PyrObject * resultArray = newPyrArray(g->gc, numberOfPaths, 0, true);
 	SetObject(result, resultArray);
-	resultArray->size = numberOfPaths;
 
-	for (size_t i = 0; i != numberOfPaths; ++i)
-		SetObject(resultArray->slots + i, newPyrString(g->gc, dirVector[i].c_str(), 0, true));
+	for (size_t i = 0; i != numberOfPaths; ++i) {
+		PyrString * pyrString = newPyrString(g->gc, dirVector[i].c_str(), 0, true);
+		SetObject(resultArray->slots + i, pyrString);
+		g->gc->GCWriteNew( resultArray,  pyrString ); // we know pyrString is white so we can use GCWriteNew
+		resultArray->size++;
+	}
 	return errNone;
 }
 
@@ -3665,6 +3662,19 @@ static int prLanguageConfig_removeIncludePath(struct VMGlobals * g, int numArgsP
 static int prLanguageConfig_removeExcludePath(struct VMGlobals * g, int numArgsPushed)
 {
 	return prLanguageConfig_removeLibraryPath(g, numArgsPushed, excludePaths);
+}
+
+static int prLanguageConfig_getCurrentConfigPath(struct VMGlobals * g, int numArgsPushed)
+{
+	PyrSlot *a = g->sp;
+	PyrString* str = newPyrString(g->gc, gLanguageConfig->getCurrentConfigPath(), 0, false);
+    if(str->size == 0) {
+        SetNil(a);
+    } else {
+        SetObject(a, str);
+    }
+    
+	return errNone;
 }
 
 static int prLanguageConfig_writeConfigFile(struct VMGlobals * g, int numArgsPushed)
@@ -4293,6 +4303,7 @@ void initPrimitives()
 	definePrimitive(base, index++, "_MainOverwriteMsg", prOverwriteMsg, 1, 0);
 
 	definePrimitive(base, index++, "_AppClock_SchedNotify", prAppClockSchedNotify, 1, 0);
+	definePrimitive(base, index++, "_LanguageConfig_getCurrentConfigPath", prLanguageConfig_getCurrentConfigPath, 1, 0);
 	definePrimitive(base, index++, "_LanguageConfig_getIncludePaths", prLanguageConfig_getIncludePaths, 1, 0);
 	definePrimitive(base, index++, "_LanguageConfig_getExcludePaths", prLanguageConfig_getExcludePaths, 1, 0);
 	definePrimitive(base, index++, "_LanguageConfig_addIncludePath", prLanguageConfig_addIncludePath, 2, 0);
@@ -4378,13 +4389,12 @@ void initMIDIPrimitives();
 	initMIDIPrimitives();
 #endif
 
-
-#if !defined(SC_WIN32) && !defined(SC_IPHONE) && !defined(__OpenBSD__) && !defined(__APPLE__)
+#if !defined(_WIN32) && !defined(SC_IPHONE) && !defined(__OpenBSD__) && !defined(__NetBSD__) && !defined(__APPLE__)
 void initLIDPrimitives();
 	initLIDPrimitives();
 #endif
 
-#if !defined(SC_WIN32) && !defined(SC_IPHONE) && !defined(__OpenBSD__)
+#if !defined(_WIN32) && !defined(SC_IPHONE) && !defined(__OpenBSD__) && !defined(__NetBSD__)
 
 void initSerialPrimitives();
 	initSerialPrimitives();
@@ -4395,7 +4405,7 @@ void initWiiPrimitives();
 #endif
 	
 #endif
-#ifdef SC_DARWIN
+#ifdef __APPLE__
 void initCoreAudioPrimitives();
 	initCoreAudioPrimitives();
 #endif
@@ -4429,6 +4439,11 @@ void deinitPrimitives()
 {
 	void deinitHIDAPIPrimitives();
 	deinitHIDAPIPrimitives();
+
+#if defined(HAVE_PORTMIDI) || defined(HAVE_ALSA)
+void deinitMIDIPrimitives();
+	deinitMIDIPrimitives();
+#endif
 
 }
 

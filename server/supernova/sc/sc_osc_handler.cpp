@@ -18,6 +18,11 @@
 
 #include <iostream>
 
+#include <boost/asio/placeholders.hpp>
+#include <boost/asio/read.hpp>
+#include <boost/bind.hpp>
+
+
 #include "osc/OscOutboundPacketStream.h"
 #include "osc/OscPrintReceivedElements.h"
 
@@ -49,7 +54,7 @@ server_node * find_node(int32_t target_id)
 
     server_node * node = instance->find_node(target_id);
 
-    if (node == NULL)
+    if (node == nullptr)
         log_printf("node not found: %d\n", target_id);
 
     return node;
@@ -62,7 +67,7 @@ abstract_group * find_group(int32_t target_id)
 
     abstract_group * node = instance->find_group(target_id);
 
-    if (node == NULL)
+    if (node == nullptr)
         log("node not found or not a group\n");
     return node;
 }
@@ -143,7 +148,7 @@ struct movable_string
     movable_string(movable_string const & rhs)
     {
         data_ = rhs.data_;
-        const_cast<movable_string&>(rhs).data_ = NULL;
+        const_cast<movable_string&>(rhs).data_ = nullptr;
     }
 
     ~movable_string(void)
@@ -158,7 +163,7 @@ struct movable_string
     }
 
 private:
-    const char * data_;
+    const char * data_ = nullptr;
 };
 
 template <typename T>
@@ -178,7 +183,7 @@ struct movable_array
     {
         length_ = rhs.length_;
         data_ = rhs.data_;
-        const_cast<movable_array&>(rhs).data_ = NULL;
+        const_cast<movable_array&>(rhs).data_ = nullptr;
     }
 
     ~movable_array(void)
@@ -203,7 +208,7 @@ struct movable_array
     }
 
 private:
-    size_t length_;
+    size_t length_ = 0;
     T * data_;
 };
 
@@ -271,7 +276,7 @@ struct fn_system_callback:
         fn_(fn)
     {}
 
-    void run(void)
+    void run(void) override
     {
         fn_();
     }
@@ -287,7 +292,7 @@ struct fn_sync_callback:
         fn_(fn)
     {}
 
-    void run(void)
+    void run(void) override
     {
         fn_();
     }
@@ -395,25 +400,26 @@ void fire_notification(movable_array<char> & msg)
     instance->send_notification(msg.data(), msg.size());
 }
 
-sc_notify_observers::error_code sc_notify_observers::add_observer(endpoint_ptr const & ep)
+int sc_notify_observers::add_observer(endpoint_ptr const & ep)
 {
-    observer_vector::iterator it = find(ep);
+    auto it = find(ep);
     if (it != observers.end())
         return already_registered;
 
     observers.push_back(ep);
-    return no_error;
+    return observers.size() - 1;
 }
 
-sc_notify_observers::error_code sc_notify_observers::remove_observer(endpoint_ptr const & ep)
+int sc_notify_observers::remove_observer(endpoint_ptr const & ep)
 {
-    observer_vector::iterator it = find(ep);
+    auto it = find(ep);
 
     if (it == observers.end())
         return not_registered;
 
+    const int observerIndex = it - observers.begin();
     observers.erase(it);
-    return no_error;
+    return observerIndex;
 }
 
 const char * sc_notify_observers::error_string(error_code error)
@@ -436,7 +442,7 @@ const char * sc_notify_observers::error_string(error_code error)
 
 sc_notify_observers::observer_vector::iterator sc_notify_observers::find(endpoint_ptr const & ep)
 {
-    for (observer_vector::iterator it = observers.begin(); it != observers.end(); ++it) {
+    for (auto it = observers.begin(); it != observers.end(); ++it) {
 
         udp_endpoint * elemUDP = dynamic_cast<udp_endpoint*>(it->get());
         udp_endpoint * testUDP = dynamic_cast<udp_endpoint*>(ep.get());
@@ -689,7 +695,7 @@ void sc_osc_handler::handle_receive_udp(const boost::system::error_code& error,
 void sc_osc_handler::tcp_connection::start(sc_osc_handler * self)
 {
     using namespace boost;
-    typedef boost::integer::big32_t big32_t;
+    typedef boost::endian::big_int32_t big_int32_t;
     asio::ip::tcp::no_delay option(true);
     socket_.set_option(option);
 
@@ -697,10 +703,10 @@ void sc_osc_handler::tcp_connection::start(sc_osc_handler * self)
 
     if (check_password) {
         std::array<char, 32> password;
-        big32_t msglen;
+        big_int32_t msglen;
         for (unsigned int i=0; i!=4; ++i) {
             size_t size = socket_.receive(asio::buffer(&msglen, 4));
-            if (size != sizeof(big32_t))
+            if (size != sizeof(big_int32_t))
                 return;
 
             if (msglen > password.size())
@@ -725,11 +731,15 @@ void sc_osc_handler::tcp_connection::start(sc_osc_handler * self)
 
 void sc_osc_handler::tcp_connection::send(const char *data, size_t length)
 {
-    boost::integer::big32_t len(length);
+    try {
+        boost::endian::big_int32_t len(length);
 
-    socket_.send(boost::asio::buffer(&len, sizeof(len)));
-    size_t written = socket_.send(boost::asio::buffer(data, length));
-    assert(length == written);
+        socket_.send(boost::asio::buffer(&len, sizeof(len)));
+        size_t written = socket_.send(boost::asio::buffer(data, length));
+        assert(length == written);
+    } catch (std::exception const & err) {
+        std::cout << "Exception when sending message over TCP: " << err.what();
+    }
 }
 
 
@@ -805,6 +815,8 @@ void sc_osc_handler::handle_packet_async(const char * data, size_t length,
                                          endpoint_ptr const & endpoint)
 {
     received_packet * p = received_packet::alloc_packet(data, length, endpoint);
+    if( !p )
+        return;
 
     if (dump_osc_packets == 1) {
         osc_received_packet packet (data, length);
@@ -840,6 +852,11 @@ sc_osc_handler::received_packet::alloc_packet(const char * data, size_t length,
 {
     /* received_packet struct and data array are located in one memory chunk */
     void * chunk = received_packet::allocate(sizeof(received_packet) + length);
+    if( !chunk ) {
+        std::cerr << "Memory allocation failure: OSC message not handled\n";
+        return nullptr;
+    }
+
     received_packet * p = (received_packet*)chunk;
     char * cpy = (char*)(chunk) + sizeof(received_packet);
     memcpy(cpy, data, length);
@@ -874,6 +891,10 @@ void sc_osc_handler::handle_bundle(received_bundle const & bundle, endpoint_ptr 
     typedef osc::ReceivedBundleElement bundle_element;
 
     if (bundle_time <= now) {
+        if (!bundle_time.is_immediate()) {
+            time_tag late = now - bundle_time;
+            log_printf("late: %f\n", late.to_seconds());
+        };
         for (bundle_iterator it = bundle.ElementsBegin(); it != bundle.ElementsEnd(); ++it) {
             bundle_element const & element = *it;
 
@@ -938,17 +959,22 @@ void handle_notify(received_message const & message, endpoint_ptr endpoint)
     int enable = first_arg_as_int(message);
 
     cmd_dispatcher<realtime>::fire_system_callback( [=]() {
+
+        int observer = 0;
+
         if (enable) {
-            auto error_code = instance->add_observer(endpoint);
-            if (error_code)
-                send_fail_message(endpoint, "/notify", sc_notify_observers::error_string(error_code));
+            observer = instance->add_observer(endpoint);
+
+            if (observer < 0)
+                send_fail_message(endpoint, "/notify", sc_notify_observers::error_string( (sc_notify_observers::error_code)observer ));
         } else {
-            auto error_code = instance->remove_observer(endpoint);
-            if (error_code)
-                send_fail_message(endpoint, "/notify", sc_notify_observers::error_string(error_code));
+            observer = instance->remove_observer(endpoint);
+            if (observer < 0)
+                send_fail_message(endpoint, "/notify", sc_notify_observers::error_string( (sc_notify_observers::error_code)observer ));
         }
 
-        send_done_message(endpoint, "/notify");
+        if (observer >= 0)
+            send_done_message(endpoint, "/notify", observer);
     });
 }
 
@@ -975,7 +1001,7 @@ void handle_status(endpoint_ptr endpoint)
           << average_load                           /* average cpu % */
           << peak_load                              /* peak cpu % */
           << instance->get_samplerate()             /* nominal samplerate */
-          << instance->get_samplerate()             /* actual samplerate */
+          << instance->smooth_samplerate             /* actual samplerate */
           << osc::EndMessage;
 
         endpoint->send(p.Data(), p.Size());
@@ -1053,15 +1079,15 @@ static bool node_position_sanity_check(node_position_constraint const & constrai
 sc_synth * add_synth(const char * name, int node_id, int action, int target_id)
 {
     if (!check_node_id(node_id))
-        return 0;
+        return nullptr;
 
     server_node * target = find_node(target_id);
-    if (target == NULL)
-        return NULL;
+    if (target == nullptr)
+        return nullptr;
 
     node_position_constraint pos = make_pair(target, node_position(action));
     if (!node_position_sanity_check(pos))
-        return NULL;
+        return nullptr;
 
     abstract_synth * synth = instance->add_synth(name, node_id, pos);
     if (!synth)
@@ -1204,7 +1230,7 @@ void handle_s_new(received_message const & msg)
 
     sc_synth * synth = add_synth(def_name, id, action, target);
 
-    if (synth == NULL)
+    if (synth == nullptr)
         return;
 
     try {
@@ -1722,7 +1748,7 @@ void handle_n_order(received_message const & msg)
 
     server_node * target = find_node(target_id);
 
-    if (target == NULL)
+    if (target == nullptr)
         return;
 
     abstract_group * target_parent;
@@ -1739,7 +1765,7 @@ void handle_n_order(received_message const & msg)
         args >> node_id;
 
         server_node * node = find_node(node_id);
-        if (node == NULL)
+        if (node == nullptr)
             continue;
 
         abstract_group * node_parent = node->get_parent();
@@ -1978,9 +2004,9 @@ struct completion_message
     void trigger_async(endpoint_ptr endpoint)
     {
         if (size_) {
-            sc_osc_handler::received_packet * p =
-                sc_osc_handler::received_packet::alloc_packet((char*)data_, size_, endpoint);
-            instance->add_sync_callback(p);
+            sc_osc_handler::received_packet * p = sc_osc_handler::received_packet::alloc_packet((char*)data_, size_, endpoint);
+            if( p )
+                instance->add_sync_callback(p);
         }
     }
 
@@ -1999,7 +2025,7 @@ struct completion_message
 
 completion_message extract_completion_message(osc::ReceivedMessageArgumentStream & args)
 {
-    osc::Blob blob(0, 0);
+    osc::Blob blob(nullptr, 0);
 
     if (!args.Eos()) {
         try {
@@ -2014,7 +2040,7 @@ completion_message extract_completion_message(osc::ReceivedMessageArgumentStream
 
 completion_message extract_completion_message(osc::ReceivedMessageArgumentIterator & it)
 {
-    const void * data = 0;
+    const void * data = nullptr;
     osc::osc_bundle_element_size_t length = 0;
 
     if (it->IsBlob())
@@ -2272,7 +2298,7 @@ void b_write_nrt_1(uint32_t bufnum, movable_string const & filename, movable_str
 
 void fire_b_write_exception(void)
 {
-    throw std::runtime_error("wrong arguments for /b_allocReadChannel");
+    throw std::runtime_error("wrong arguments for /b_write");
 }
 
 template <bool realtime>
@@ -2565,6 +2591,10 @@ void handle_b_set(received_message const & msg)
     osc::int32 buffer_index = it->AsInt32(); ++it;
 
     buffer_wrapper::sample_t * data = sc_factory->get_buffer(buffer_index);
+    if( !data ) {
+        log_printf("/b_set called on unallocated buffer");
+        return;
+    }
 
     while (it != end) {
         osc::int32 index = it->AsInt32(); ++it;
@@ -2582,6 +2612,10 @@ void handle_b_setn(received_message const & msg)
     osc::int32 buffer_index = it->AsInt32(); ++it;
 
     buffer_wrapper::sample_t * data = sc_factory->get_buffer(buffer_index);
+    if( !data ) {
+        log_printf("/b_setn called on unallocated buffer");
+        return;
+    }
 
     while (it != end) {
         osc::int32 index = it->AsInt32(); ++it;
@@ -2604,6 +2638,11 @@ void handle_b_fill(received_message const & msg)
     osc::int32 buffer_index = it->AsInt32(); ++it;
 
     buffer_wrapper::sample_t * data = sc_factory->get_buffer(buffer_index);
+    if( !data ) {
+        log_printf("/b_fill called on unallocated buffer");
+        return;
+    }
+
 
     while (it != end) {
         osc::int32 index = it->AsInt32(); ++it;
@@ -2692,6 +2731,11 @@ void handle_b_get(received_message const & msg, endpoint_ptr endpoint)
 
     const SndBuf * buf = sc_factory->get_buffer_struct(buffer_index);
     const sample * data = buf->data;
+    if( !data ) {
+        log_printf("/b_get called on unallocated buffer");
+        return;
+    }
+
     const int max_sample = buf->frames * buf->channels;
 
     osc::OutboundPacketStream p(return_message.c_array(), alloc_size);
@@ -2744,6 +2788,10 @@ void handle_b_getn(received_message const & msg, endpoint_ptr endpoint)
 
     const SndBuf * buf = sc_factory->get_buffer_struct(buffer_index);
     const sample * data = buf->data;
+    if( !data ) {
+        log_printf("/b_getn called on unallocated buffer");
+        return;
+    }
     const int max_sample = buf->frames * buf->channels;
 
     while (!args.Eos())
@@ -3154,7 +3202,7 @@ void handle_u_cmd(received_message const & msg, int size)
 
     server_node * target_synth = find_node(node_id);
 
-    if (target_synth == NULL || target_synth->is_group())
+    if (target_synth == nullptr || target_synth->is_group())
         return;
 
     sc_synth * synth = static_cast<sc_synth*>(target_synth);
@@ -3171,8 +3219,7 @@ void handle_cmd(received_message const & msg, int size, endpoint_ptr endpoint, i
 
     const char * cmd = args.gets();
 
-    // FIXME: how to handle endpoints?
-    sc_factory->run_cmd_plugin(&sc_factory->world, cmd, &args, nullptr/*endpoint.get()*/);
+    sc_factory->run_cmd_plugin(&sc_factory->world, cmd, &args, endpoint.get());
 }
 
 } /* namespace */
@@ -3881,17 +3928,20 @@ void sc_osc_handler::do_asynchronous_command(World * world, void* replyAddr, con
                                              int completionMsgSize, void* completionMsgData)
 {
     completion_message msg(completionMsgSize, completionMsgData);
-//    nova_endpoint * endpoint = replyAddr ? static_cast<nova_endpoint*>(replyAddr)
-//                                         : nullptr;
+    endpoint_ptr shared_endpoint;
 
-    endpoint_ptr endpoint; // FIXME: how to pass endpoints through asynchronous commands?
+    nova_endpoint * endpoint = replyAddr ? static_cast<nova_endpoint*>(replyAddr)
+                                         : nullptr;
+
+    if (endpoint)
+        shared_endpoint = endpoint->shared_from_this();
 
     if (world->mRealTime)
         cmd_dispatcher<true>::fire_system_callback(std::bind(handle_asynchronous_plugin_stage2<true>, world, cmdName,
-                                                               cmdData, stage2, stage3, stage4, cleanup, msg, endpoint));
+                                                               cmdData, stage2, stage3, stage4, cleanup, msg, shared_endpoint));
     else
         cmd_dispatcher<false>::fire_system_callback(std::bind(handle_asynchronous_plugin_stage2<false>, world, cmdName,
-                                                                cmdData, stage2, stage3, stage4, cleanup, msg, endpoint));
+                                                                cmdData, stage2, stage3, stage4, cleanup, msg, shared_endpoint));
 }
 
 

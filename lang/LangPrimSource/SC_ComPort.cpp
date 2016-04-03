@@ -129,7 +129,7 @@ void SC_UdpInPort::handleReceivedUDP(const boost::system::error_code& error,
 
 	packet->mReplyAddr.mProtocol  = kUDP;
 	packet->mReplyAddr.mAddress   = remoteEndpoint.address();
-	packet->mReplyAddr.mPort      = sc_htons(remoteEndpoint.port());
+	packet->mReplyAddr.mPort      = remoteEndpoint.port();
 	packet->mReplyAddr.mSocket    = udpSocket.native_handle();
 
 	char *data = (char*)malloc(bytesTransferred);
@@ -295,16 +295,29 @@ void SC_TcpClientPort::handleMsgReceived(const boost::system::error_code &error,
 	packet->mReplyAddr.mProtocol = kTCP;
 	packet->mReplyAddr.mSocket   = socket.native_handle();
 	packet->mReplyAddr.mAddress  = socket.remote_endpoint().address();
+    packet->mReplyAddr.mPort      = socket.remote_endpoint().port();
 
 	packet->mSize                 = OSCMsgLength;
 	packet->mData                 = data;
 
-	ProcessOSCPacket(packet, endpoint.port(), timeReceived);
+	ProcessOSCPacket(packet, socket.local_endpoint().port(), timeReceived);
 
 	startReceive();
 }
 
-void SC_TcpClientPort::Close()
+int SC_TcpClientPort::Close()
 {
-	socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both);
+	boost::system::error_code error;
+
+	socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, error);
+	socket.close();
+	
+	if (error) {
+		if( error != boost::asio::error::not_connected ) {
+			::error("Socket shutdown failed, closed socket anyway. %s", error.message().c_str() );
+			return errFailed;
+		}
+	}
+	
+	return errNone;
 }

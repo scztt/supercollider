@@ -16,8 +16,8 @@
 //  the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 //  Boston, MA 02111-1307, USA.
 
-#ifndef SERVER_synth_definition_HPP
-#define SERVER_synth_definition_HPP
+#ifndef SERVER_SYNTH_DEFINITION_HPP
+#define SERVER_SYNTH_DEFINITION_HPP
 
 #include <cassert>
 #include <cstdint>
@@ -43,11 +43,12 @@ protected:
     struct map_type:
         public named_hash_entry
     {
-        map_type(slot_identifier_type const & name, slot_index_t index):
-            named_hash_entry(name), index(index)
+        map_type(slot_identifier_type const & name, slot_index_t index, int number_of_values):
+            named_hash_entry(name), index(index), number_of_values(number_of_values)
         {}
 
-        slot_index_t index;
+        const slot_index_t index;
+        const int number_of_values;
     };
 
 private:
@@ -62,7 +63,7 @@ private:
             return value;
         }
 
-        std::size_t value;
+        const std::size_t value;
     };
 
     bool exists(const char * str) const
@@ -80,10 +81,10 @@ protected:
         slot_resolver_map.clear_and_dispose(boost::checked_deleter<map_type>());
     }
 
-    void register_slot(symbol const & str, slot_index_t i)
+    void register_slot(symbol const & str, slot_index_t i, int number_of_values)
     {
         assert(not exists(str.c_str()));
-        map_type * elem = new map_type(str, i);
+        map_type * elem = new map_type(str, i, number_of_values);
         bool success = slot_resolver_map.insert(*elem).second;
         assert(success);
 
@@ -104,13 +105,28 @@ public:
         return resolve_slot(str, string_hash(str));
     }
 
+    slot_index_t resolve_slot_with_size(const char * str, int & number_of_values) const
+    {
+        return resolve_slot_with_size(str, string_hash(str), number_of_values);
+    }
+
     slot_index_t resolve_slot(const char * str, std::size_t hashed_value) const
     {
-        slot_resolver_map_t::const_iterator it = slot_resolver_map.find(str, hash_value(hashed_value), named_hash_equal());
+        auto it = slot_resolver_map.find(str, hash_value(hashed_value), named_hash_equal());
         if (it == slot_resolver_map.end())
             return -1;
         else
             return it->index;
+    }
+
+    slot_index_t resolve_slot_with_size(const char * str, std::size_t hashed_value, int & number_of_values) const
+    {
+        auto it = slot_resolver_map.find(str, hash_value(hashed_value), named_hash_equal());
+        if (it == slot_resolver_map.end())
+            return -1;
+
+        number_of_values = it->number_of_values;
+        return it->index;
     }
     /*@}*/
 
@@ -164,12 +180,11 @@ class synth_definition:
     public detail::slot_resolver
 {
 public:
-    synth_definition(symbol const & name):
+    explicit synth_definition(symbol const & name):
         named_hash_entry(name)
     {}
 
-    virtual ~synth_definition(void)
-    {}
+    virtual ~synth_definition(void) = default;
 
     virtual abstract_synth * create_instance(int node_id) = 0;
 
@@ -181,4 +196,4 @@ typedef boost::intrusive_ptr<synth_definition> synth_definition_ptr;
 
 } /* namespace nova */
 
-#endif /* SERVER_synth_definition_HPP */
+#endif /* SERVER_SYNTH_DEFINITION_HPP */

@@ -29,7 +29,7 @@
 extern timed_mutex gLangMutex;
 
 double elapsedTime();
-double elapsedRealTime();
+double monotonicClockTime();
 int64 OSCTime();
 
 int64 ElapsedTimeToOSC(double elapsed);
@@ -60,7 +60,7 @@ inline int lockLanguageOrQuit(bool shouldBeRunning)
 		}
 	} else {
 		for (;;) {
-			locked = gLangMutex.try_lock_for(chrono::seconds(1));
+			locked = gLangMutex.try_lock_for(std::chrono::seconds(1));
 			if (shouldBeRunning == false) {
 				if (locked)
 					gLangMutex.unlock();

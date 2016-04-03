@@ -18,13 +18,23 @@ Main : Process {
 
 		// set the 's' interpreter variable to the default server.
 		interpreter.s = Server.default;
-		GUI.fromID( this.platform.defaultGUIScheme );
-		GeneralHID.fromID( this.platform.defaultHIDScheme );
+
 		openPorts = Set[NetAddr.langPort];
 		this.platform.startup;
 		StartUp.run;
 
-		("Welcome to SuperCollider %.".format(Main.version)
+		Main.overwriteMsg.split(Char.nl).drop(-1).collect(_.split(Char.tab)).do {|x|
+			if(x[2].beginsWith(Platform.classLibraryDir) and: {x[1].contains(""+/+"SystemOverwrites"+/+"").not}
+			) {
+				warn("Extension in '%' overwrites % in main class library.".format(x[1],x[0]));
+				didWarnOverwrite = true;
+			}
+		};
+		if(didWarnOverwrite) {
+			inform("Intentional overwrites must be put in a 'SystemOverwrites' subfolder.")
+		};
+
+		("\n\n*** Welcome to SuperCollider %. ***".format(Main.version)
 			+ (Platform.ideName.switch(
 				"scvim", {"For help type :SChelp."},
 				"scel",  {"For help type C-c C-y."},
@@ -41,17 +51,6 @@ Main : Process {
 
 			})
 		).postln;
-
-		Main.overwriteMsg.split(Char.nl).drop(-1).collect(_.split(Char.tab)).do {|x|
-			if(x[2].beginsWith(Platform.classLibraryDir) and: {x[1].contains(""+/+"SystemOverwrites"+/+"").not}
-			) {
-				warn("Extension in '%' overwrites % in main class library.".format(x[1],x[0]));
-				didWarnOverwrite = true;
-			}
-		};
-		if(didWarnOverwrite) {
-			inform("\nIntentional overwrites must be put in a 'SystemOverwrites' subfolder.")
-		}
 	}
 
 	shutdown { // at recompile, quit
@@ -97,7 +96,7 @@ Main : Process {
 
 	prOpenUDPPort {|portNum|
 		_OpenUDPPort
-		^false
+		^this.primitiveFailed;
 	}
 
 //	override in platform specific extension
@@ -166,8 +165,6 @@ Main : Process {
 
 	exitFullScreen { platform.exitFullScreen }
 
-	setDeferredTaskInterval { |interval| platform.setDeferredTaskInterval(interval) }
-
 	*overwriteMsg { _MainOverwriteMsg ^this.primitiveFailed }
 }
 
@@ -194,17 +191,6 @@ MethodOverride {
 		path2.openTextFile;
 	}
 
-	*simplifyPath { arg path;
-		var extDir, sysExtDir, quarkDir;
-		extDir = Platform.userExtensionDir;
-		sysExtDir = Platform.systemExtensionDir;
-		quarkDir = LocalQuarks.globalPath;
-		path = path.replace("'" ++ extDir, "Platform.userExtensionDir ++ '");
-		path = path.replace("'" ++ sysExtDir, "Platform.systemExtensionDir ++ '");
-		path = path.replace("'" ++ quarkDir, "LocalQuarks.globalPath ++ '");
-		^path
-
-	}
 
 	*all {
 		var msg = Main.overwriteMsg.drop(-1); // drop last newline
@@ -212,7 +198,7 @@ MethodOverride {
 		^lines.collect { |line| this.fromLine(line) };
 	}
 
-	*printAll { arg simplifyPaths = true;
+	*printAll {
 		var all = this.all;
 		var classes = all.collect(_.ownerClass).as(Set);
 		if(all.isEmpty) { "There are no overwritten methods in class library".postln; ^this };
@@ -222,10 +208,6 @@ MethodOverride {
 			all.select { |x| x.ownerClass == class }.do { |x|
 				var activePath = x.activePath;
 				var overriddenPath = x.overriddenPath;
-				if(simplifyPaths) {
-					activePath = this.simplifyPath(x.activePath);
-					overriddenPath = this.simplifyPath(x.overriddenPath);
-				};
 				("\t" ++ x.ownerClass.name ++ ":" ++ x.selector).postln;
 				("\t\t" ++ activePath).postln;
 				("\t\t" ++ overriddenPath).postln;

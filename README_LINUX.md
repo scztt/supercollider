@@ -4,17 +4,9 @@ Supercollider 3 for linux
 Intro
 -----
 
-SuperCollider is a synthesis engine (scsynth) and programming language
-(sclang), originally Mac-based but now very widely used on Linux
-(since Stefan Kersten ported the code in 2003). SuperCollider is free
-software under the GPL - its main homepage is at
+SuperCollider is a synthesis engine (scsynth) and programming language (sclang), originally Mac-based but now very widely used and actively developed on Linux.
 
-http://supercollider.github.com
-
-To get further information on supercollider usage or development, you
-might consider subscribing to the mailing lists
-
-http://www.beast.bham.ac.uk/research/sc_mailing_lists.shtml
+Stefan Kersten first ported the code to Linux in 2003.
 
 
 Build requirements
@@ -22,7 +14,7 @@ Build requirements
 
 (most of these will be available in your linux distribution as packages )
 
- * gcc >= 4.6
+ * gcc >= 4.8
    http://www.gnu.org/software/gcc
 
  * jack and libjack
@@ -33,7 +25,7 @@ Build requirements
    * http://www.mega-nerd.com/libsndfile
    * _the_ soundfile i/o library
 
- * cmake >= 2.8
+ * cmake >= 2.8.11
    * http://www.cmake.org
    * cross-platform build system
 
@@ -49,16 +41,17 @@ Build requirements (optional features)
 --------------------------------------
 (most of these will be available in your linux distribution as packages)
 
- * Qt >= 4.7 (+ qtwebkit)
+ * Qt >= 5.3 (+ qtwebkit)
    * http://qt-project.org
    * cross-platform graphical user interface library, for Qt IDE and sclang's Qt GUI kit
+   * Qt >= 5.0 should work, but build-test is done against 5.3
 
  * alsa
    * http://www.alsa-project.org
    * advanced linux sound architecture drivers and library, for sclang's MIDI interface
 
  * libudev
-   * http://www.freedesktop.org/software/systemd/libudev/
+   * http://www.freedesktop.org/software/systemd/man/libudev.html
    * interaction with the device manager of linux (used for HID support)
 
  * libreadline >= 5
@@ -91,8 +84,6 @@ On debian (unstable) you can install the following packages and be set
 for building supercollider:
 
  - build-essential
- - libqt4-dev
- - libqtwebkit-dev
  - libjack-dev or libjack-jackd2-dev
  - libsndfile1-dev
  - libasound2-dev
@@ -104,8 +95,9 @@ for building supercollider:
  - libudev-dev
  - libcwiid-dev (for wiimote support)
  - pkg-config
- - cmake
- - subversion (required by the Quarks class at run-time)
+ - git (used by the Quarks package management system)
+ - cmake (on some platforms, cmake >= 2.9 may require manual build)
+ - qt5-default qt5-qmake qttools5-dev qttools5-dev-tools qtdeclarative5-dev libqt5webkit5-dev qtpositioning5-dev libqt5sensors5-dev
 
 
 Building
@@ -117,7 +109,7 @@ builds in a specific build directory:
    ```
    $> mkdir build
    $> cd build
-   $> cmake ..
+   $> cmake -DCMAKE_PREFIX_PATH=/path/to/qt5 ..
    ```
 
  - to run the build process run:
@@ -178,6 +170,7 @@ $> cmake -DCMAKE_CXX_COMPILER=/usr/lib/ccache/g++ -DCMAKE_C_COMPILER=/usr/lib/cc
 ```
 
 This assumes your ccache executables are installed into `/usr/lib/ccache` - you may need to change the path to reflect your installation.
+
 
 Building a Debian package
 -------------------------
@@ -279,12 +272,6 @@ names are separated by ':' as in the unix PATH variable:
    ```
 
 
-Reporting bugs
---------------
-
-Please report bugs either to the sc-users or sc-dev mailing lists.
-
-
 Contributors to this document
 -----------------------------
 
@@ -297,9 +284,3 @@ Contributors to this document
 - nescivi (marije baalman)
 - dan stowell
 - tim blechmann
-
-
-Outro
------
-
-Thanks to james mccartney, for making this great piece of audio software publically and freely available.

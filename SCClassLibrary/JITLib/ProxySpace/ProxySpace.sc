@@ -21,11 +21,15 @@ ProxySpace : LazyEnvir {
 	init { | argServer, argName, argClock |
 		server = argServer;
 		clock = argClock;
-		name = argName;
+		this.name = argName;
 		if(clock.notNil) { this.quant = 1.0 };
-		if(argName.notNil) { this.add };
 	}
 
+	name_ { |argName|
+		if (name.notNil) { this.remove };
+		name = argName;
+		if(argName.notNil) { this.add };
+	}
 
 	makeProxy {
 		var proxy = NodeProxy.new(server);
@@ -241,6 +245,30 @@ ProxySpace : LazyEnvir {
 	}
 
 	doFunctionPerform { |selector| ^this[selector] }
+
+	// making copies
+
+	copy {
+		^super.copy.copyState(this)
+	}
+
+	copyState { |proxySpace|
+		server = proxySpace.server;
+		fadeTime = proxySpace.fadeTime;
+		quant = proxySpace.quant;
+		reshaping = proxySpace.reshaping;
+		awake = proxySpace.awake;
+		group = proxySpace.group;
+		if(proxySpace.clock.isKindOf(TempoBusClock)) {
+			this.makeTempoClock(
+				proxySpace.clock.tempo,
+				proxySpace.clock.beats,
+				proxySpace.clock.seconds
+			)
+		} {
+			clock = proxySpace.clock;
+		}
+	}
 
 	// global access
 

@@ -120,12 +120,26 @@ Controls the verbosity of server messages. A value of 0 is normal behaviour, -1 
 method:: zeroConf
 A Boolean indication whether or not the server should publish its port using zero configuration networking, to facilitate network interaction. This is true by default; if you find unacceptable delays (beachballing) upon server boot, you can try setting this to false.
 
+method:: ugenPluginsPath
+A path or an Array of paths. If non-nil, the standard paths are NOT searched for plugins. This corresponds with the option "-U".
+
 method:: restrictedPath
 Allows you to restrict the system paths in which scsynth is allowed to read/write files during running. A nil value (the default) means no restriction. Otherwise, set it as a string representing a single path.
 
 method:: threads
 Number of audio threads that are spawned by supernova. For scsynth this value is ignored. If it is code::nil::or 0, it
 uses the one thread per CPU. Default is code::nil::.
+
+method:: useSystemClock
+Tells supernova whether to sync to the driver's sample clock, or to the system clock.
+For scsynth this value is ignored.
+list::
+## code::false:: (default) -- Use the sample clock. This helps to
+support sample-accurate scheduling; however, messaging latency from
+the SuperCollider language will drift over long periods of time.
+## code::true:: -- Use the system clock. Timestamped messages will maintain consistent
+latency over long sessions, but may not be perfectly sample-accurate.
+::
 
 method:: memoryLocking
 A Boolean indicating whether the server should try to lock its memory into physical RAM. Default is code::false::.
@@ -143,6 +157,8 @@ Returns:: a String specifying the options in the format required by the command-
 method:: firstPrivateBus
 Returns:: the index of the first audio bus on this server which is not used by the input and output hardware.
 
+method:: pingsBeforeConsideredDead
+number of failed pings (attempts to contact server process) before server is considered dead.
 
 Examples::
 code::

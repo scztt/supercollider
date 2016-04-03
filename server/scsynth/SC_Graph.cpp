@@ -431,28 +431,6 @@ void Graph_Ctor(World *inWorld, GraphDef *inGraphDef, Graph *graph, sc_msg_iter 
 	inGraphDef->mRefCount ++ ;
 }
 
-void Graph_RemoveID(World* inWorld, Graph *inGraph)
-{
-	if (!World_RemoveNode(inWorld, &inGraph->mNode)) {
-		int err = kSCErr_Failed; // shouldn't happen..
-		throw err;
-	}
-
-	HiddenWorld* hw = inWorld->hw;
-	int id = hw->mHiddenID = (hw->mHiddenID - 8) | 0x80000000;
-	inGraph->mNode.mID = id;
-	inGraph->mNode.mHash = Hash(id);
-    if (!World_AddNode(inWorld, &inGraph->mNode)) {
-		scprintf("mysterious failure in Graph_RemoveID\n");
-		Node_Delete(&inGraph->mNode);
-		// enums are uncatchable. must throw an int.
-		int err = kSCErr_Failed; // shouldn't happen..
-		throw err;
-    }
-
-	//inWorld->hw->mRecentID = id;
-}
-
 void Graph_FirstCalc(Graph *inGraph)
 {
 	//scprintf("->Graph_FirstCalc\n");
@@ -579,7 +557,7 @@ int Graph_GetControl(Graph* inGraph, int32 inHash, int32 *inName, uint32 inIndex
 {
 	ParamSpecTable* table = GRAPH_PARAM_TABLE(inGraph);
 	ParamSpec *spec = table->Get(inHash, inName);
-	if (!spec) return kSCErr_IndexOutOfRange;
+	if (!spec || inIndex >= spec->mNumChannels) return kSCErr_IndexOutOfRange;
 	return Graph_GetControl(inGraph, spec->mIndex + inIndex, outValue);
 }
 
@@ -596,7 +574,9 @@ void Graph_SetControl(Graph* inGraph, int32 inHash, int32 *inName, uint32 inInde
 {
 	ParamSpecTable* table = GRAPH_PARAM_TABLE(inGraph);
 	ParamSpec *spec = table->Get(inHash, inName);
-	if (spec) Graph_SetControl(inGraph, spec->mIndex + inIndex, inValue);
+	if (!spec || inIndex >= spec->mNumChannels) return;
+	//printf("setting: %s: to value %f\n", spec->mName, inValue);
+	Graph_SetControl(inGraph, spec->mIndex + inIndex, inValue);
 }
 
 
@@ -605,7 +585,9 @@ void Graph_MapControl(Graph* inGraph, int32 inHash, int32 *inName, uint32 inInde
 {
 	ParamSpecTable* table = GRAPH_PARAM_TABLE(inGraph);
 	ParamSpec *spec = table->Get(inHash, inName);
-	if (spec) Graph_MapControl(inGraph, spec->mIndex + inIndex, inBus);
+	if (!spec || inIndex >= spec->mNumChannels) return;
+	//printf("mapping: %s: to bus index %i\n", spec->mName, inBus);
+	Graph_MapControl(inGraph, spec->mIndex + inIndex, inBus);
 }
 
 void Graph_MapControl(Graph* inGraph, uint32 inIndex, uint32 inBus)
@@ -625,6 +607,8 @@ void Graph_MapAudioControl(Graph* inGraph, int32 inHash, int32 *inName, uint32 i
 {
     ParamSpecTable* table = GRAPH_PARAM_TABLE(inGraph);
     ParamSpec *spec = table->Get(inHash, inName);
+	if (!spec || inIndex >= spec->mNumChannels) return;
+	//printf("mapping: %s: to bus index %i\n", spec->mName, inBus);
     if (spec) Graph_MapAudioControl(inGraph, spec->mIndex + inIndex, inBus);
 }
 
@@ -632,13 +616,12 @@ void Graph_MapAudioControl(Graph* inGraph, uint32 inIndex, uint32 inBus)
 {
     if (inIndex >= GRAPHDEF(inGraph)->mNumControls) return;
     World *world = inGraph->mNode.mWorld;
-//    inGraph->mControlRates[inIndex] = 2;
     /* what is the below doing??? it is unmapping by looking for negative ints */
     if (inBus >= 0x80000000) {
-	inGraph->mControlRates[inIndex] = 0;
-	inGraph->mMapControls[inIndex] = inGraph->mControls + inIndex;
+		inGraph->mControlRates[inIndex] = 0;
+		inGraph->mMapControls[inIndex] = inGraph->mControls + inIndex;
 	} else if (inBus < world->mNumAudioBusChannels) {
         inGraph->mControlRates[inIndex] = 2;
-	inGraph->mMapControls[inIndex] = world->mAudioBus + (inBus * world->mBufLength);
+		inGraph->mMapControls[inIndex] = world->mAudioBus + (inBus * world->mBufLength);
     }
 }

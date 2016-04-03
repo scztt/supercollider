@@ -32,7 +32,7 @@
 #include "Rendezvous.h"
 #include "SC_Export.h"
 
-SC_DLLEXPORT_C int scprintf(const char *fmt, ...);
+SCSYNTH_DLLEXPORT_C int scprintf(const char *fmt, ...);
 
 #ifndef __APPLE__
 static const char* kSCRendezvousServiceName = "SuperCollider";
@@ -78,6 +78,7 @@ void PublishPortToRendezvous(SCRendezvousProtocol protocol, short portNum)
 	}
 
 	CFNetServiceRegisterWithOptions(netServiceRef, 0, NULL); // don't care about the error
+	CFRelease( netServiceRef );
 }
 
 #elif HAVE_AVAHI

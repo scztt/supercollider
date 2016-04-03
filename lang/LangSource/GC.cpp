@@ -49,7 +49,7 @@ int checkScans = 0;
 int checkPartialScans = 0;
 int checkSlotsScanned = 0;
 
-double elapsedRealTime();
+double elapsedTime();
 
 inline void PyrGC::beginPause()
 {
@@ -59,12 +59,12 @@ inline void PyrGC::beginPause()
 	checkNumToScan = mNumToScan;
 	checkPartialScans = mNumPartialScans;
 	checkSlotsScanned = mSlotsScanned;
-	pauseBeginTime = elapsedRealTime();
+	pauseBeginTime = elapsedTime();
 }
 
 inline void PyrGC::endPause()
 {
-	double pauseTime = elapsedRealTime() - pauseBeginTime;
+	double pauseTime = elapsedTime() - pauseBeginTime;
 	if (pauseTime > 0.001) numPausesGreaterThanOneMillisecond++;
 	if (pauseTime > maxPauseTime) {
 		maxPauseTime = pauseTime;
@@ -344,7 +344,7 @@ void PyrGC::BecomeImmutable(PyrObject *inObject)
 
 void DumpBackTrace(VMGlobals *g);
 
-HOT PyrObject *PyrGC::New(size_t inNumBytes, long inFlags, long inFormat, bool inCollect)
+HOT PyrObject *PyrGC::New(size_t inNumBytes, long inFlags, long inFormat, bool inRunCollection)
 {
 	PyrObject *obj = NULL;
 
@@ -369,7 +369,7 @@ HOT PyrObject *PyrGC::New(size_t inNumBytes, long inFlags, long inFormat, bool i
 	mNumAllocs++;
 
 	mNumToScan += credit;
-	obj = Allocate(inNumBytes, sizeclass, inCollect);
+	obj = Allocate(inNumBytes, sizeclass, inRunCollection);
 
 	obj->obj_format = inFormat;
 	obj->obj_flags = inFlags & 255;
@@ -420,7 +420,7 @@ HOT PyrObject *PyrGC::NewFrame(size_t inNumBytes, long inFlags, long inFormat, b
 	return obj;
 }
 
-PyrObject *PyrGC::NewFinalizer(ObjFuncPtr finalizeFunc, PyrObject *inObject, bool inCollect)
+PyrObject *PyrGC::NewFinalizer(ObjFuncPtr finalizeFunc, PyrObject *inObject, bool inRunCollection)
 {
 	PyrObject *obj = NULL;
 
@@ -437,7 +437,7 @@ PyrObject *PyrGC::NewFinalizer(ObjFuncPtr finalizeFunc, PyrObject *inObject, boo
 	mAllocTotal += credit;
 	mNumAllocs++;
 
-	if (inCollect && mNumToScan >= kScanThreshold) {
+	if (inRunCollection && mNumToScan >= kScanThreshold) {
 		Collect();
 	}
 

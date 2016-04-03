@@ -23,7 +23,7 @@ NdefGui : JITGui {
 
 	proxy_ { |proxy| ^this.object_(proxy) }
 	proxy { ^this.object }
-	edits { ^paramGui.widgets }
+	edits { ^paramGui.paramViews }
 
 	editKeys {
 		if (paramGui.isNil) { ^[] };
@@ -52,7 +52,7 @@ NdefGui : JITGui {
 		var highIndices = (0..num-1) + parOffset;
 
 		defer {
-			paramGui.widgets.do {|widget, i|
+			paramGui.paramViews.do {|widget, i|
 				if(highIndices.includes(i)) {
 					paramGui.highlight(i, highNames[i-parOffset],onCol);
 				} {
@@ -70,7 +70,8 @@ NdefGui : JITGui {
 	*big {
 			// two lines - for big editor
 		^[\name, \type, \CLR, \reset, \scope, \doc, \end, \fade, \poll,
-			\monitorL, /*\play,*/ \pausR, \sendR  ]
+			\monitorL, /*\play,*/ \pausR, \sendR
+		]
 	}
 
 	*full {
@@ -154,7 +155,7 @@ NdefGui : JITGui {
 		};
 
 
-			// a clumsy way to figure out how to set resizes for all children.
+		// a clumsy way to figure out how to set resizes for all children.
 		lineBreakIndex = zone.children.detectIndex { |a, i|
 			var b = zone.children[i + 1];
 			b.notNil and: { b.bounds.left < a.bounds.left }
@@ -196,23 +197,23 @@ NdefGui : JITGui {
 	}
 
 	makeNameView { |nameWid, height|
-		try { // QT temp fix
 			nameView = DragBoth(zone, Rect(0,0, nameWid, height))
 			.font_(font).align_(\center)
-			.receiveDragHandler_({
+			.background_(skin.background)
+			.stringColor_(skin.fontColor);
+
+			nameView.receiveDragHandler_({
 				var drag = View.currentDrag;
 				if (drag.isKindOf(String)) { drag = drag.interpret };
 				this.object_(drag);
 			});
-		} {
-			nameView = TextView(zone, Rect(0,0, nameWid, height))
-		    .font_(font)
-		}
 	}
 
 	makeTypeView { |width, height|
 		typeView = StaticText(zone, width@height).string_("-").align_(0)
-			.font_(font).align_(\center);
+		.background_(skin.background)
+		.stringColor_(skin.fontColor)
+		.font_(font).align_(\center);
 	}
 
 	makeClrBut { |width, height|
@@ -282,8 +283,14 @@ NdefGui : JITGui {
 				numberWidth: width - 28
 		);
 
-		fadeBox.labelView.font_(font).background_(skin.offColor);
-		fadeBox.numberView.font_(font).background_(skin.offColor);
+		fadeBox.labelView.font_(font)
+			.background_(skin.background)
+			.stringColor_(skin.fontColor);
+
+		fadeBox.numberView.font_(font)
+			.background_(skin.background)
+			.stringColor_(skin.fontColor)
+		.refresh;
 	}
 
 	makeMonitor { |width, height, npOptions|
@@ -353,7 +360,7 @@ NdefGui : JITGui {
 			\name, object.key,
 			\type, object.typeStr,
 			\isPaused, object.paused,
-			\canSend, object.sources.notNil,
+			\canSend, object.sources.size > 0,
 			\fadeTime, object.fadeTime,
 			\isPlaying, object.isPlaying
 		]);
@@ -379,7 +386,7 @@ NdefGui : JITGui {
 
 		if (typeView.notNil) {
 			if (newState[\type] != prevState[\type]) {
-				typeView.string_(newState[\type])
+				// typeView.string_(newState[\type].asString)
 			}
 		};
 
@@ -397,7 +404,7 @@ NdefGui : JITGui {
 
 		if (sendBut.notNil) {
 			if (newState[\canSend] != prevState[\canSend]) {
-				sendBut.value_(newState[\canSend].binaryValue)
+				sendBut.value_(newState[\canSend].binaryValue);
 			}
 		};
 		if (wakeBut.notNil) {

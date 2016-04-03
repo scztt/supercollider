@@ -131,11 +131,11 @@ public:
 #endif
     }
 
-    void run(void);
+    void run(void) override;
 
-    void set(slot_index_t slot_index, sample val);
-    float get(slot_index_t slot_index) const;
-    void set_control_array(slot_index_t slot_index, size_t count, sample * val);
+    void set(slot_index_t slot_index, sample val) override;
+    float get(slot_index_t slot_index) const override;
+    void set_control_array(slot_index_t slot_index, size_t count, sample * val) override;
 
     sample get(slot_index_t slot_index)
     {
@@ -181,9 +181,11 @@ public:
     template <bool ControlBusIsAudio>
     void map_control_buses(const char * slot_name, int bus_index, int count)
     {
-        int slot_index = resolve_slot(slot_name);
+        int controls_per_slot;
+        int slot_index = resolve_slot_with_size(slot_name, controls_per_slot);
         if (slot_index == -1)
             return;
+        count = std::min(count, controls_per_slot);
         map_control_buses<ControlBusIsAudio>(slot_index, bus_index, count);
     }
 
@@ -221,10 +223,10 @@ private:
 
     friend class sc_ugen_def;
 
-    bool initialized;
-    int_fast8_t trace;
+    bool initialized  = false;
+    int_fast8_t trace = 0;
     Unit ** calc_units;
-    sample * unit_buffers;
+    sample * unit_buffers = nullptr;
     int32_t calc_unit_count, unit_count;
 
     RGen rgen;

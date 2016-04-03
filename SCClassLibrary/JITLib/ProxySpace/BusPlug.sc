@@ -150,7 +150,8 @@ BusPlug : AbstractFunction {
 
 	// you have to stop and play explicitly
 	setBus { | inBus |
-		if(bus != inBus and: { inBus.notNil }) {
+		if(inBus.isNil) { Error("BusPlug:setBus: bus can't be set to nil.").throw };
+		if(bus != inBus) {
 			//postf("% has new bus: % \nold bus was: %\n", this, inBus, bus);
 			this.freeBus;
 			bus = inBus;
@@ -176,7 +177,7 @@ BusPlug : AbstractFunction {
 			^true // already there
 		};
 
-		if(reshaping.isNil) {
+		if(reshaping.isNil or: { reshaping == \static }) {
 			^(this.rate === rate) and: { numChannels <= bus.numChannels }
 		};
 		// for now: always reshape on rate change, because rate adaption happens earlier.
@@ -298,6 +299,12 @@ BusPlug : AbstractFunction {
 		if(this.isNeutral.not) { ^bus.scope(bufsize, zoom) } { "Can't scope unintitialized bus".warn }
 	}
 
+	plot { | duration = 0.01, bounds, minval, maxval, separately = false |
+		^if(this.isNeutral.not) {
+			this.wakeUp;
+			bus.plot(duration, bounds, minval, maxval, separately);
+		} { "Can't plot unintitialized bus".warn; nil }
+	}
 
 
 	// bundling messages
@@ -310,7 +317,7 @@ BusPlug : AbstractFunction {
 			^this
 		};
 		this.newMonitorToBundle(bundle, numChannels);
-		group = group ?? { if(parentGroup.isPlaying) { parentGroup } { this.homeServer.asGroup } };
+		group = group ?? { if(parentGroup.isPlaying) { parentGroup } };
 		if(numChannels.notNil) { out = (0..numChannels-1) + (out ? 0) };
 		monitor.playNBusToBundle(bundle, out, nil, nil, bus, vol, fadeTime, group, addAction, multi);
 	}
@@ -322,7 +329,7 @@ BusPlug : AbstractFunction {
 			^this
 		};
 		this.newMonitorToBundle(bundle, ins !? { ins.asArray.maxItem + 1 });
-		group = group ?? { if(parentGroup.isPlaying) { parentGroup } { this.homeServer.asGroup } };
+		group = group ?? { if(parentGroup.isPlaying) { parentGroup } };
 		monitor.playNBusToBundle(bundle, outs, amps, ins, bus, vol, fadeTime, group, addAction);
 	}
 
@@ -330,6 +337,24 @@ BusPlug : AbstractFunction {
 		if(this.isNeutral) { this.initBus(\audio, numChannels) };
 		this.initMonitor;
 		if(this.isPlaying.not) { this.wakeUpToBundle(bundle) };
+	}
+
+	// making copies
+
+	copy {
+		^this.class.new(server).copyState(this)
+	}
+
+	copyState { | proxy |
+		var proxyBus = proxy.bus;
+		if(this.isNeutral.not) { this.clear };
+		parentGroup = proxy.parentGroup;
+		reshaping = proxy.reshaping;
+		monitor = proxy.monitor.copy;
+		proxyBus !? {
+			bus = Bus.alloc(proxyBus.rate, proxyBus.server, proxyBus.numChannels);
+			this.makeBusArg;
+		}
 	}
 
 	// server state

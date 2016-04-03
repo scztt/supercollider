@@ -25,6 +25,8 @@
 #include "SC_PlugIn.h"
 #include <cstdio>
 
+#include <boost/align/is_aligned.hpp>
+
 using namespace std; // for math functions
 
 
@@ -270,6 +272,7 @@ extern "C"
 	void NumAudioBuses_Ctor(Unit *unit, int inNumSamples);
 	void NumControlBuses_Ctor(Unit *unit, int inNumSamples);
 	void NumBuffers_Ctor(Unit *unit, int inNumSamples);
+	void NodeID_Ctor(Unit *unit, int inNumSamples);
 	void NumRunningSynths_Ctor(Unit *unit, int inNumSamples);
 	void NumRunningSynths_next(Unit *unit, int inNumSamples);
 
@@ -498,7 +501,7 @@ void RadiansPerSample_Ctor(Unit *unit, int inNumSamples)
 	ZOUT0(0) = unit->mWorld->mFullRate.mRadiansPerSample;
 }
 
-void Blocksize_Ctor(Unit *unit, int inNumSamples)
+void BlockSize_Ctor(Unit *unit, int inNumSamples)
 {
 	ZOUT0(0) = unit->mWorld->mFullRate.mBufLength;
 }
@@ -534,6 +537,11 @@ void NumBuffers_Ctor(Unit *unit, int inNumSamples)
 	ZOUT0(0) = unit->mWorld->mNumSndBufs;
 }
 
+void NodeID_Ctor(Unit *unit, int inNumSamples)
+{
+	ZOUT0(0) = (float) unit->mParent->mNode.mID;
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 void NumRunningSynths_Ctor(Unit *unit, int inNumSamples)
@@ -546,6 +554,7 @@ void NumRunningSynths_next(Unit *unit, int inNumSamples)
 {
 	ZOUT0(0) = unit->mWorld->mNumGraphs;
 }
+
 
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -4016,7 +4025,7 @@ static bool DelayUnit_init_0(DelayUnit *unit)
 		if (ZIN(0) == ZOUT(0))
 			SETCALC(Delay_next_0_nop);
 #ifdef NOVA_SIMD
-		else if (!(BUFLENGTH & 15))
+		else if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 			SETCALC(Delay_next_0_nova);
 #endif
 		else
@@ -5983,14 +5992,24 @@ void GrainTap_Ctor(GrainTap *unit)
 
 
 #define GRAIN_BUF \
-	const SndBuf *buf = bufs + bufnum; \
-	LOCK_SNDBUF_SHARED(buf); \
-	const float *bufData __attribute__((__unused__)) = buf->data; \
-	uint32 bufChannels __attribute__((__unused__)) = buf->channels; \
-	uint32 bufSamples __attribute__((__unused__)) = buf->samples; \
-	uint32 bufFrames = buf->frames; \
-	int guardFrame __attribute__((__unused__)) = bufFrames - 2; \
-
+    const SndBuf *buf = NULL;                                           \
+    if (bufnum >= world->mNumSndBufs) {                                 \
+        int localBufNum = bufnum - numBufs;                             \
+        Graph *parent = unit->mParent;                                  \
+        if(localBufNum <= parent->localBufNum) {                        \
+            buf = parent->mLocalSndBufs + localBufNum;                  \
+        } else {                                                        \
+            continue;                                                   \
+        }                                                               \
+    } else {                                                            \
+        buf = bufs + bufnum;                                            \
+    }                                                                   \
+    LOCK_SNDBUF_SHARED(buf);                                            \
+    const float *bufData __attribute__((__unused__)) = buf->data;       \
+    uint32 bufChannels __attribute__((__unused__)) = buf->channels;     \
+    uint32 bufSamples __attribute__((__unused__)) = buf->samples;       \
+    uint32 bufFrames = buf->frames;                                     \
+    int guardFrame __attribute__((__unused__)) = bufFrames - 2;         \
 
 inline float IN_AT(Unit* unit, int index, int offset)
 {
@@ -6157,7 +6176,6 @@ void TGrains_next(TGrains *unit, int inNumSamples)
 			// start a grain
 			if (unit->mNumActive+1 >= kMaxGrains) break;
 			uint32 bufnum = (uint32)IN_AT(unit, 1, i);
-			if (bufnum >= numBufs) continue;
 			GRAIN_BUF
 
 			if (bufChannels != 1) continue;
@@ -7735,13 +7753,14 @@ PluginLoad(Delay)
 	DefineInfoUnit(ControlDur);
 	DefineInfoUnit(SubsampleOffset);
 	DefineInfoUnit(RadiansPerSample);
-	DefineInfoUnit(Blocksize);
+	DefineInfoUnit(BlockSize);
 	DefineInfoUnit(NumInputBuses);
 	DefineInfoUnit(NumOutputBuses);
 	DefineInfoUnit(NumAudioBuses);
 	DefineInfoUnit(NumControlBuses);
 	DefineInfoUnit(NumBuffers);
 	DefineInfoUnit(NumRunningSynths);
+	DefineInfoUnit(NodeID);
 
 #define DefineBufInfoUnit(name) \
 	(*ft->fDefineUnit)(#name, sizeof(BufInfoUnit), (UnitCtorFunc)&name##_Ctor, 0, 0);

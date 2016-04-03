@@ -94,7 +94,7 @@ BinaryOpUGen : BasicOpUGen {
 			if (b == -1.0, { ^a.neg });
 		})})})});
 
- 		^super.new1(rate, selector, a, b)
+		^super.new1(rate, selector, a, b)
 	}
 
 	init { arg theOperator, a, b;
@@ -211,6 +211,7 @@ BinaryOpUGen : BasicOpUGen {
 	optimizeToSum3 {
 		var a, b;
 		#a, b = inputs;
+		if(a.rate == \demand or: { b.rate == \demand }) { ^nil };
 
 		if (a.isKindOf(BinaryOpUGen) and: { a.operator == '+'
 			and: { a.descendants.size == 1 }}) {
@@ -229,6 +230,7 @@ BinaryOpUGen : BasicOpUGen {
 	optimizeToSum4 {
 		var a, b;
 		#a, b = inputs;
+		if(a.rate == \demand or: { b.rate == \demand }) { ^nil };
 
 		if (a.isKindOf(Sum3) and: { a.descendants.size == 1 }) {
 			buildSynthDef.removeUGen(a);
@@ -372,14 +374,14 @@ MulAdd : UGen {
 		var minus, nomul, noadd;
 
 		// eliminate degenerate cases
- 		if (mul == 0.0, { ^add });
+		if (mul == 0.0, { ^add });
 		minus = mul == -1.0;
 		nomul = mul == 1.0;
 		noadd = add == 0.0;
- 		if (nomul && noadd, { ^in });
- 		if (minus && noadd, { ^in.neg });
- 		if (noadd, { ^in * mul });
-  		if (minus, { ^add - in });
+		if (nomul && noadd, { ^in });
+		if (minus && noadd, { ^in.neg });
+		if (noadd, { ^in * mul });
+		if (minus, { ^add - in });
 		if (nomul, { ^in + add });
 
 		if (this.canBeMulAdd(in, mul, add)) {

@@ -84,7 +84,8 @@ struct Method {
         SignatureWithArgumentsAndDefaultValues
     };
 
-    QString signature( SignatureStyle style ) const;
+    QString   signature( SignatureStyle style ) const;
+    bool      matches(const QString& toMatch) const;
 
     Class *ownerClass;
     FlyweightString name;
@@ -111,8 +112,11 @@ class Introspection
 {
 public:
     Introspection();
-    Introspection( QString const & yamlString );
-    ~Introspection();
+    Introspection( Introspection const & rhs) = default;
+    explicit Introspection( QString const & yamlString );
+
+    Introspection & operator=( Introspection const & rhs) = default;
+    Introspection & operator=( Introspection && rhs);
 
     typedef QMap< QString, QList<Method*> > ClassMethodMap; // maps Path to List of Methods
 

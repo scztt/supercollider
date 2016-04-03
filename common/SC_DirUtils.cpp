@@ -87,7 +87,7 @@ char *sc_StandardizePath(const char *path, char *newpath2)
 		char home[PATH_MAX];
 		sc_GetUserHomeDirectory(home, PATH_MAX);
 
-		if (home != 0) {
+		if (home[0] != 0) {
 			if ((pathLen - 1 + strlen(home)) >= MAXPATHLEN) {
 				return 0;
 			}
@@ -152,7 +152,7 @@ bool sc_IsNonHostPlatformDir(const char *name)
 	const char a[] = "linux", b[] = "windows", c[]="iphone";
 #elif defined(__linux__)
 	const char a[] = "osx", b[] = "windows", c[]="iphone";
-#elif defined(__FreeBSD__) || defined(__OpenBSD__)
+#elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 	const char a[] = "osx", b[] = "windows", c[]="iphone";
 #elif defined(_WIN32)
 	const char a[] = "osx", b[] = "linux", c[]="iphone";

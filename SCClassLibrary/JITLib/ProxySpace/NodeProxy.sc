@@ -13,6 +13,7 @@ NodeProxy : BusPlug {
 		^res
 	}
 
+
 	init {
 		nodeMap = ProxyNodeMap.new;
 		objects = Order.new;
@@ -383,16 +384,12 @@ NodeProxy : BusPlug {
 	}
 
 	setNodeMap { | map, xfade = true |
-		var bundle, old, fadeTime;
+		var bundle;
 		if(map.isNil) { ^this.unmap };
 		map.set(\fadeTime, this.fadeTime); // keep old fadeTime
-		bundle = MixedBundle.new;
-		old = nodeMap;
-		nodeMap = map;
-		old.clear;
-		this.linkNodeMap;
-		//this.nodeMapChanged;
+		nodeMap.clear; nodeMap = map; this.linkNodeMap;
 		if(this.isPlaying) {
+			bundle = MixedBundle.new;
 			if(xfade) { this.sendEach(nil,true) }
 			{
 				this.unsetToBundle(bundle); // unmap old
@@ -404,13 +401,13 @@ NodeProxy : BusPlug {
 
 	// play proxy as source of receiver
 	<-- { | proxy |
-		var bundle = MixedBundle.new, dt = 0.1;
+		var bundle = MixedBundle.new, fadeTime = this.fadeTime;
 		this.source = proxy;
 
 		if(proxy.monitor.isPlaying) {
-			proxy.stop(fadeTime: dt);
+			proxy.stop(fadeTime: fadeTime);
 			if(monitor.isPlaying.not) {
-				this.playToBundle(bundle, fadeTime: dt)
+				this.playToBundle(bundle, fadeTime: fadeTime)
 			}
 		};
 		bundle.add(proxy.moveBeforeMsg(this));
@@ -458,19 +455,18 @@ NodeProxy : BusPlug {
 			i = this.index;
 			bundle = this.getBundle;
 			if(loaded.not) { this.loadToBundle(bundle) };
-			obj.spawnToBundle(bundle, extraArgs, this);
-			nodeMap.addToBundle(bundle, -1);
+			obj.spawnToBundle(bundle, { nodeMap.asOSCArgArray ++ extraArgs.value.asOSCArgArray }, this);
 			bundle.schedSend(server);
 		}
 	}
 
 
 	send { | extraArgs, index, freeLast = true |
-		var bundle, obj;
+		var bundle, obj, fadeTime = this.fadeTime;
 		if(objects.isEmpty) { ^this };
 		if(index.isNil) {
 			bundle = this.getBundle;
-			if(freeLast) { this.stopAllToBundle(bundle) };
+			if(freeLast) { this.stopAllToBundle(bundle, fadeTime) };
 			if(loaded.not) { this.loadToBundle(bundle) };
 			this.sendAllToBundle(bundle, extraArgs);
 			bundle.schedSend(server);
@@ -479,7 +475,7 @@ NodeProxy : BusPlug {
 			obj = objects.at(index);
 			if(obj.notNil) {
 				bundle = this.getBundle;
-				if(freeLast) { obj.stopToBundle(bundle) };
+				if(freeLast) { obj.stopToBundle(bundle, fadeTime) };
 				if(loaded.not) { this.loadToBundle(bundle) };
 				this.sendObjectToBundle(bundle, obj, extraArgs, index);
 				bundle.schedSend(server);
@@ -519,8 +515,24 @@ NodeProxy : BusPlug {
 		bundle.schedSend(server, clock ? TempoClock.default, quant)
 	}
 
+	// making copies
 
+	copy {
+		^this.class.new(server).copyState(this)
+	}
 
+	copyState { |proxy|
+
+		super.copyState(proxy);
+
+		proxy.objects.keysValuesDo { |key, val| objects[key] = val.copy };
+		this.nodeMap = proxy.nodeMap.copy;
+
+		loaded = false;
+		awake = proxy.awake; paused = proxy.paused;
+		clock = proxy.clock; quant = proxy.quant;
+
+	}
 
 	// gui support
 
@@ -733,9 +745,9 @@ NodeProxy : BusPlug {
 
 	// bundle: apply the node map settings to the entire group
 	sendAllToBundle { | bundle, extraArgs |
-		extraArgs = nodeMap.asOSCArgArray ++ extraArgs.value.asOSCArgArray;
+		var args = Thunk({ nodeMap.asOSCArgArray ++ extraArgs.value.asOSCArgArray });
 		objects.do { arg item;
-			item.playToBundle(bundle, extraArgs, this);
+			item.playToBundle(bundle, args, this);
 		}
 	}
 
@@ -749,7 +761,7 @@ NodeProxy : BusPlug {
 	// bundle: send single object
 	sendObjectToBundle { | bundle, object, extraArgs, index |
 		var target, nodes;
-		var synthID = object.playToBundle(bundle, nodeMap.asOSCArgArray ++ extraArgs.value.asOSCArgArray, this);
+		var synthID = object.playToBundle(bundle, { nodeMap.asOSCArgArray ++ extraArgs.value.asOSCArgArray }, this);
 		if(synthID.notNil) {
 			if(index.notNil and: { objects.size > 1 }) { // if nil, all are sent anyway
 				// make list of nodeIDs following the index
@@ -848,7 +860,7 @@ NodeProxy : BusPlug {
 				};
 				if(monitor.isPlaying) {
 					//postf("in % restarting monitor\n", this);
-					monitor.playNBusToBundle(bundle, bus: bus);
+					monitor.playNBusToBundle(bundle, bus: bus, fadeTime: timeArgs[0]);
 				}
 			}
 		}
@@ -985,7 +997,7 @@ Ndef : NodeProxy {
 			};
 			key = key.key;
 		} {
-			server = Server.default;
+			server = defaultServer ? Server.default;
 		};
 
 		dict = this.dictFor(server);
@@ -1020,6 +1032,11 @@ Ndef : NodeProxy {
 			dict.registerServer;
 		};
 		^dict
+	}
+
+	copy { |toKey|
+		if(key == toKey) { Error("cannot copy to identical key").throw };
+		^this.class.new(toKey).copyState(this)
 	}
 
 	proxyspace {

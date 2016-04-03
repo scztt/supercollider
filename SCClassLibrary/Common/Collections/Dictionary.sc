@@ -59,6 +59,9 @@ Dictionary : Set {
 		};
 		^result
 	}
+	++ { arg dict;
+		^this.copy.putAll(dict)
+	}
 
 	associationAt { arg key;
 		var index = this.scanFor(key);
@@ -178,7 +181,7 @@ Dictionary : Set {
 
 	merge {|that, func, fill = true|
 		var commonKeys, myKeys = this.keys, otherKeys = that.keys;
-		var res = ();
+		var res = this.species.new;
 
 		if (myKeys == otherKeys) {
 			commonKeys = myKeys
@@ -195,6 +198,18 @@ Dictionary : Set {
 			otherKeys.difference(myKeys).do { |key| res[key] = that[key] };
 		};
 		^res
+	}
+
+
+	mergeItem { |key, val, func|
+		var old;
+		if(func.notNil) {
+			old = this.at(key);
+			if(old.notNil) {
+				 val = func.value(val, old)
+			}
+		};
+		this.put(key, val)
 	}
 
 	blend { |that, blend = 0.5, fill = true, specs|
@@ -278,6 +293,17 @@ Dictionary : Set {
 		this.keysValuesDo { |key, val| array.add(key); array.add(val) };
 		^array
 	}
+
+	isAssociationArray { ^false }
+
+	asPairs {
+		^this.getPairs
+	}
+
+	asDict {
+		^this
+	}
+
 
 	// PRIVATE IMPLEMENTATION
 	keysValuesArrayDo { arg argArray, function;

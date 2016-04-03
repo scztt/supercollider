@@ -23,6 +23,8 @@
 
 #include <algorithm>            /* for std::min and std::max */
 
+#include <boost/align/is_aligned.hpp>
+
 #include "simd_peakmeter.hpp"
 
 #ifdef NOVA_SIMD
@@ -378,14 +380,14 @@ void Trig1_Ctor(Trig1 *unit)
 {
 	if (unit->mCalcRate == calc_FullRate && INRATE(0) != calc_FullRate) {
 #ifdef NOVA_SIMD
-		if (!(BUFLENGTH & 15))
+		if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 			SETCALC(Trig1_next_k_nova);
 		else
 #endif
 		SETCALC(Trig1_next_k);
 	} else {
 #ifdef NOVA_SIMD
-		if (!(BUFLENGTH & 15))
+		if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 			SETCALC(Trig1_next_nova);
 		else
 #endif
@@ -394,7 +396,7 @@ void Trig1_Ctor(Trig1 *unit)
 	unit->mCounter = 0;
 	unit->m_prevtrig = 0.f;
 
-	ZOUT0(0) = 0.f;
+	Trig1_next(unit, 1);
 }
 
 void Trig1_next(Trig1 *unit, int inNumSamples)
@@ -556,14 +558,14 @@ void Trig_Ctor(Trig *unit)
 {
 	if (unit->mCalcRate == calc_FullRate && INRATE(0) != calc_FullRate) {
 #ifdef NOVA_SIMD
-		if (!(BUFLENGTH & 15))
+		if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 			SETCALC(Trig_next_k_nova);
 		else
 #endif
 		SETCALC(Trig_next_k);
 	} else {
 #ifdef NOVA_SIMD
-		if (!(BUFLENGTH & 15))
+		if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 			SETCALC(Trig_next_nova);
 		else
 #endif
@@ -574,7 +576,7 @@ void Trig_Ctor(Trig *unit)
 	unit->m_prevtrig = 0.f;
 	unit->mLevel = 0.f;
 
-	ZOUT0(0) = 0.f;
+	Trig_next(unit, 1);
 }
 
 void Trig_next(Trig *unit, int inNumSamples)
@@ -764,14 +766,15 @@ void SendTrig_next(SendTrig *unit, int inNumSamples)
 void SendTrig_next_aka(SendTrig *unit, int inNumSamples)
 {
 	float *trig = ZIN(0);
-        float *value = ZIN(2);
+	int id = (int)ZIN0(1);
+	float *value = ZIN(2);
 	float prevtrig = unit->m_prevtrig;
 
 	LOOP1(inNumSamples,
 		float curtrig = ZXP(trig);
-                float curval = ZXP(value);
+		float curval = ZXP(value);
 		if (curtrig > 0.f && prevtrig <= 0.f) {
-			SendTrigger(&unit->mParent->mNode, (int)ZIN0(1), curval);
+			SendTrigger(&unit->mParent->mNode, id, curval);
 		}
 		prevtrig = curtrig;
 	);
@@ -969,7 +972,7 @@ void SetResetFF_Ctor(SetResetFF *unit)
 	unit->m_prevreset = 0.f;
 	unit->mLevel = 0.f;
 
-	ZOUT0(0) = 0.f;
+	SetResetFF_next_k(unit, 1);
 }
 
 
@@ -1092,7 +1095,7 @@ void Latch_Ctor(Latch *unit)
 #ifdef NOVA_SIMD
 		if (BUFLENGTH == 64)
 			SETCALC(Latch_next_ak_nova_64);
-		if (!(BUFLENGTH & 15))
+		if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 			SETCALC(Latch_next_ak_nova);
 		else
 #endif
@@ -1180,7 +1183,7 @@ void Gate_Ctor(Gate *unit)
 #ifdef NOVA_SIMD
 		if (BUFLENGTH == 64)
 			SETCALC(Gate_next_ak_nova_64);
-		if (!(BUFLENGTH & 15))
+		if (boost::alignment::is_aligned( BUFLENGTH, 16 ))
 			SETCALC(Gate_next_ak_nova);
 		else
 #endif
@@ -1189,7 +1192,7 @@ void Gate_Ctor(Gate *unit)
 
 	unit->mLevel = 0.f;
 
-	ZOUT0(0) = 0.f;
+	Gate_next_ak(unit, 1);
 }
 
 
@@ -1240,7 +1243,7 @@ void Schmidt_Ctor(Schmidt *unit)
 
 	unit->mLevel = 0.f;
 
-	ZOUT0(0) = 0.f;
+	Schmidt_next(unit, 1);
 }
 
 void Schmidt_next(Schmidt *unit, int inNumSamples)
@@ -1272,7 +1275,7 @@ void PulseDivider_Ctor(PulseDivider *unit)
 	unit->mLevel = 0.f;
 	unit->mCounter = (long)floor(ZIN0(2) + 0.5);
 
-	ZOUT0(0) = 0.f;
+	PulseDivider_next(unit, 1);
 }
 
 
@@ -1321,7 +1324,7 @@ void PulseCount_Ctor(PulseCount *unit)
 	unit->m_prevreset = 0.f;
 	unit->mLevel = 0.f;
 
-	ZOUT0(0) = 0.f;
+	PulseCount_next_k(unit, 1);
 }
 
 
@@ -1412,7 +1415,7 @@ void Stepper_Ctor(Stepper *unit)
 	unit->m_prevreset = 0.f;
 	unit->mLevel = (float)resetval;
 
-	ZOUT0(0) = 0.f;
+	Stepper_next_ak(unit, 1);
 }
 
 
@@ -1506,7 +1509,7 @@ void TDelay_Ctor(TDelay *unit)
 	unit->m_prevtrig = 0.f;
 	unit->mCounter = 0;
 
-	ZOUT0(0) = 0.f;
+	TDelay_next(unit, 1);
 }
 
 

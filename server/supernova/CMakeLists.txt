@@ -11,34 +11,9 @@ if(CMAKE_COMPILER_IS_GNUCXX)
 
 endif(CMAKE_COMPILER_IS_GNUCXX)
 
-
-if(SN_MEMORY_DEBUGGING)
-    set_property(DIRECTORY .
-                 APPEND
-                 PROPERTY COMPILE_DEFINITIONS_DEBUG NOVA_MEMORY_DEBUGGING)
-endif()
-
-if(NOVA_SIMD)
-    add_definitions(-DNOVA_SIMD)
-endif()
-
-
-include_directories(${CMAKE_SOURCE_DIR}/external_libraries/boost_endian
-                    ${CMAKE_SOURCE_DIR}/external_libraries/oscpack_1_1_0
-                    ${CMAKE_SOURCE_DIR}/external_libraries/TLSF-2.4.6/src
-                    )
-
 if(APPLE)
     include_directories(${CMAKE_SOURCE_DIR}/external_libraries/libsndfile)
 endif()
-
-include_directories(${CMAKE_SOURCE_DIR}/include/plugin_interface
-                    ${CMAKE_SOURCE_DIR}/include/common
-                    ${CMAKE_SOURCE_DIR}/common
-                    ${CMAKE_SOURCE_DIR}/include/server
-                    ${CMAKE_SOURCE_DIR}/server/scsynth
-                    .
-                    )
 
 set(libsupernova_src
     sc/sc_synth_definition.cpp
@@ -53,7 +28,6 @@ set(libsupernova_src
     ${CMAKE_SOURCE_DIR}/common/SC_StringParser.cpp
     ${CMAKE_SOURCE_DIR}/common/SC_StandAloneInfo_Darwin.cpp
     server/buffer_manager.cpp
-    server/dsp_context.cpp
     server/memory_pool.cpp
     server/node_graph.cpp
     server/server.cpp
@@ -61,12 +35,14 @@ set(libsupernova_src
 )
 
 if(APPLE)
-	set_property(SOURCE ${CMAKE_SOURCE_DIR}/common/SC_DirUtils.cpp PROPERTY COMPILE_FLAGS -xobjective-c++)
+  list( APPEND libsupernova_src ${CMAKE_SOURCE_DIR}/common/SC_Apple.mm )
+
+  set_property(SOURCE ${CMAKE_SOURCE_DIR}/common/SC_DirUtils.cpp PROPERTY COMPILE_FLAGS -xobjective-c++)
 endif()
 
 
 if (FFT_GREEN)
-	list(APPEND libsupernova_src ../../common/fftlib.c)
+    list(APPEND libsupernova_src ../../common/fftlib.c)
 endif()
 
 if(WIN32)
@@ -82,39 +58,78 @@ else()
   add_library (libsupernova STATIC ${libsupernova_src})
 endif()
 
-set_property(TARGET libsupernova
-             PROPERTY OUTPUT_NAME supernova)
+if(NOT WIN32)
+  set_property(TARGET libsupernova
+               PROPERTY OUTPUT_NAME supernova)
+endif()
 
-add_executable(supernova server/main.cpp ${supernova_headers})
+target_link_libraries(libsupernova oscpack tlsf ${PTHREADS_LIBRARIES} boost_thread)
 
-set_property(TARGET libsupernova supernova
-             APPEND
-             PROPERTY COMPILE_DEFINITIONS SUPERNOVA)
+target_compile_definitions(libsupernova PUBLIC SUPERNOVA)
+target_include_directories(libsupernova PUBLIC
+                    ${CMAKE_SOURCE_DIR}/include/plugin_interface
+                    ${CMAKE_SOURCE_DIR}/include/common
+                    ${CMAKE_SOURCE_DIR}/common
+                    ${CMAKE_SOURCE_DIR}/include/server
+                    ${CMAKE_SOURCE_DIR}/server/scsynth
+                    ${CMAKE_SOURCE_DIR}/external_libraries/boost_endian
+                    ${CMAKE_SOURCE_DIR}/external_libraries/boost_sync/include
+                    ${CMAKE_SOURCE_DIR}/external_libraries/nova-tt
+                    .
+                    )
+
+if(SN_MEMORY_DEBUGGING)
+    target_compile_definitions(libsupernova PUBLIC NOVA_MEMORY_DEBUGGING)
+endif()
+
+if(NOVA_SIMD)
+    target_compile_definitions(libsupernova PUBLIC NOVA_SIMD)
+    target_include_directories(libsupernova PUBLIC ${CMAKE_SOURCE_DIR}/external_libraries)
+endif()
 
 find_library(DL NAMES dl)
-if (DL)
-    set_property(TARGET libsupernova
-                 APPEND
-                 PROPERTY COMPILE_DEFINITIONS DLOPEN)
+if(DL)
+    target_compile_definitions(libsupernova PUBLIC DLOPEN)
     target_link_libraries(libsupernova ${DL})
 endif()
 
-if (WIN32 OR APPLE)
+if(APPLE)
     find_package(Portaudio)
     if(NOT PORTAUDIO_FOUND)
         message(FATAL_ERROR "Portaudio missing")
     endif()
-    add_definitions(-DPORTAUDIO_BACKEND ${PORTAUDIO_DEFINITIONS})
-    include_directories(${PORTAUDIO_INCLUDE_DIRS})
+    target_compile_definitions(libsupernova PUBLIC PORTAUDIO_BACKEND ${PORTAUDIO_DEFINITIONS})
+    target_include_directories(libsupernova PUBLIC ${PORTAUDIO_INCLUDE_DIRS})
     target_link_libraries(libsupernova ${PORTAUDIO_LIBRARIES})
+elseif (WIN32)
+    if(NOT TARGET portaudio)
+        if(NOT SC_BUILD_PA)
+            add_library(portaudio ${PA_LIBRARY_TYPE} IMPORTED GLOBAL)
+            if(MSVC)
+                set_target_properties(portaudio PROPERTIES
+                    IMPORTED_LOCATION_DEBUG   ${PORTAUDIO_LIBRARY_DEBUG}
+                    IMPORTED_LOCATION         ${PORTAUDIO_LIBRARY_RELEASE}
+                )
+            else(MSVC)
+                set_target_properties(portaudio PROPERTIES
+                    IMPORTED_LOCATION         ${PORTAUDIO_LIBRARIES}
+                )
+            endif(MSVC)
+        endif(NOT SC_BUILD_PA)
+    endif(NOT TARGET portaudio)
+    target_compile_definitions(libsupernova PUBLIC PORTAUDIO_BACKEND -DPORTAUDIO_BACKEND)
+    target_include_directories(libsupernova PUBLIC ${PORTAUDIO_INCLUDE_DIRS})
+    if(MSYS)
+        target_link_libraries(libsupernova ${PORTAUDIO_LIBRARIES})
+    else()
+        target_link_libraries(libsupernova portaudio)
+    endif()
 else()
     find_library(JACK NAMES jack)
     if (JACK)
-        set_property(TARGET libsupernova supernova
-                    APPEND
-                    PROPERTY COMPILE_DEFINITIONS JACK_BACKEND)
+        target_compile_definitions(libsupernova PUBLIC JACK_BACKEND)
         target_link_libraries(libsupernova ${JACK})
-        include_directories(${JACK_INCLUDE_DIRS})
+        target_include_directories(libsupernova PUBLIC ${JACK_INCLUDE_DIRS})
     endif()
 endif()
 
@@ -123,50 +138,53 @@ if (NOT SNDFILE_FOUND)
     message(SEND_ERROR "Cannot find libsndfile")
 else()
     target_link_libraries(libsupernova ${SNDFILE_LIBRARIES})
-    include_directories(${SNDFILE_INCLUDE_DIR})
+    target_include_directories(libsupernova PUBLIC ${SNDFILE_INCLUDE_DIR})
 endif()
 
 if (FFTW3F_FOUND)
-	include_directories (${FFTW3F_INCLUDE_DIR})
-	target_link_libraries(libsupernova ${FFTW3F_LIBRARY})
+    target_include_directories(libsupernova PUBLIC ${FFTW3F_INCLUDE_DIR})
+    target_link_libraries(libsupernova ${FFTW3F_LIBRARY})
 endif()
 
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_link_libraries(libsupernova rt)
 endif()
 
-target_link_libraries(libsupernova oscpack tlsf ${PTHREADS_LIBRARIES})
 
-if (Boost_FOUND)
+if(Boost_FOUND)
     target_link_libraries(libsupernova ${Boost_SYSTEM_LIBRARY} ${Boost_FILESYSTEM_LIBRARY} ${Boost_PROGRAM_OPTIONS_LIBRARY})
+    target_include_directories(libsupernova PUBLIC ${Boost_INCLUDE_DIRS})
 else()
+    target_include_directories(libsupernova PUBLIC ${CMAKE_SOURCE_DIR}/external_libraries/boost)
     target_link_libraries(libsupernova boost_system boost_filesystem boost_program_options)
 endif()
 
-target_link_libraries(supernova libsupernova)
+if(CMAKE_COMPILER_IS_GNUCXX)
+    if( ${_gcc_version} VERSION_GREATER 5 )
+      target_link_libraries( libsupernova atomic )
+    endif()
+endif()
 
 if(WIN32)
     target_link_libraries(libsupernova wsock32 ws2_32 winmm)
 endif()
 
-if(APPLE)
-	# determines the app name and app install location (scappbundlename, scappdir):
-	include (${CMAKE_SOURCE_DIR}/cmake_modules/MacAppFolder.cmake)
 
-	install(TARGETS supernova
-			DESTINATION ${scappauxresourcesdir}
-			PERMISSIONS OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE OWNER_WRITE)
+add_executable(supernova server/main.cpp ${supernova_headers})
+target_link_libraries(supernova libsupernova)
 
-elseif(WIN32)
-	install(TARGETS supernova
+if(WIN32)
+    install(TARGETS supernova
         DESTINATION "SuperCollider"
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
-
+elseif(APPLE)
+    add_custom_command(TARGET supernova POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:SuperCollider>/../Resources/
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:supernova> $<TARGET_FILE_DIR:SuperCollider>/../Resources)
 else()
-
-install(TARGETS supernova
-        DESTINATION "bin"
-        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+  install(TARGETS supernova
+          DESTINATION "bin"
+          PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 endif()
 
 if(LTO)
@@ -179,5 +197,5 @@ endif()
 
 if (APPLE)
     target_link_libraries(libsupernova "-framework Accelerate")
-    target_link_libraries(libsupernova "-framework CoreAudio -framework CoreServices -framework Foundation")
+    target_link_libraries(libsupernova "-framework CoreAudio -framework CoreServices -framework Foundation -framework ApplicationServices")
 endif()

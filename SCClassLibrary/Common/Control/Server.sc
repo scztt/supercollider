@@ -1,5 +1,4 @@
-ServerOptions
-{
+ServerOptions {
 	// order of variables is important here. Only add new instance variables to the end.
 	var <numAudioBusChannels=128;
 	var <>numControlBusChannels=4096;
@@ -37,6 +36,7 @@ ServerOptions
 
 	var <>memoryLocking = false;
 	var <>threads = nil; // for supernova
+	var <>useSystemClock = false;  // for supernova
 
 	var <numPrivateAudioBusChannels=112;
 
@@ -136,7 +136,7 @@ ServerOptions
 			o = o ++ " -H % %".format(inDevice.asString.quote, outDevice.asString.quote);
 		};
 		if (verbosity != 0, {
-			o = o ++ " -v " ++ verbosity;
+			o = o ++ " -V " ++ verbosity;
 		});
 		if (zeroConf.not, {
 			o = o ++ " -R 0";
@@ -158,6 +158,9 @@ ServerOptions
 			if (Server.program.asString.endsWith("supernova")) {
 				o = o ++ " -T " ++ threads;
 			}
+		});
+		if (useSystemClock.notNil, {
+			o = o ++ " -C " ++ useSystemClock.asInteger
 		});
 		if (maxLogins.notNil, {
 			o = o ++ " -l " ++ maxLogins;
@@ -285,7 +288,7 @@ Server {
 	var <window, <>scopeWindow;
 	var <emacsbuf;
 	var recordBuf, <recordNode, <>recHeaderFormat="aiff", <>recSampleFormat="float";
-	var <>recChannels=2;
+	var <>recChannels=2, <>recBufSize;
 
 	var <volume;
 
@@ -357,7 +360,7 @@ Server {
 		var n = options.maxLogins ? 1;
 
 		numControl = options.numControlBusChannels div: n;
-		numAudio = options.numAudioBusChannels div: n;
+		numAudio = options.numPrivateAudioBusChannels div: n;
 
 		controlBusOffset = numControl * offset;
 		audioBusOffset = options.firstPrivateBus + (numAudio * offset);
@@ -475,7 +478,7 @@ Server {
 	listSendMsg { arg msg;
 		addr.sendMsg(*msg);
 	}
- 	listSendBundle { arg time, msgs;
+	listSendBundle { arg time, msgs;
 		addr.sendBundle(time, *(msgs.asArray));
 	}
 
@@ -740,6 +743,7 @@ Server {
 	}
 
 	bootServerApp {
+		var f;
 		if (inProcess) {
 			"booting internal".inform;
 			this.bootInProcess;
@@ -751,6 +755,26 @@ Server {
 			};
 
 			pid = (program ++ options.asOptionsString(addr.port)).unixCmd;
+			if( options.protocol == \tcp ){
+				f = {
+					|attempts|
+					attempts = attempts - 1;
+					try { addr.connect } {
+						|err|
+						if (err.isKindOf(PrimitiveFailedError) and: { err.failedPrimitiveName == '_NetAddr_Connect'}) {
+							if(attempts > 0){
+								0.2.wait;
+								f.value(attempts)
+							}{
+								"Couldn't connect to server % via TCP\n".postf(this.name);
+							}
+						} {
+							err.throw;
+						}
+					}
+				};
+				fork{ f.(10) }
+			};
 			("booting " ++ addr.port.asString).inform;
 		};
 	}
@@ -763,7 +787,7 @@ Server {
 				this.wait(\done);
 				0.1.wait;
 				func.value;
-				this.boot;
+				defer { this.boot }
 			}
 		} {
 			func.value;
@@ -823,6 +847,7 @@ Server {
 		*/
 		dumpMode = code;
 		this.sendMsg(\dumpOSC, code);
+		this.changed(\dumpOSC, code);
 	}
 
 	quit {
@@ -849,6 +874,7 @@ Server {
 			};
 		};
 		addr.sendMsg("/quit");
+		if( options.protocol == \tcp ){ fork{ 0.1.wait; addr.disconnect } };
 		this.stopAliveThread;
 		if (inProcess, {
 			this.quitInProcess;
@@ -1032,7 +1058,7 @@ Server {
 				path = thisProcess.platform.recordingsDir +/+ "SC_" ++ Date.localtime.stamp ++ "." ++ recHeaderFormat;
 			};
 		};
-		recordBuf = Buffer.alloc(this, 65536 * 16, recChannels,
+		recordBuf = Buffer.alloc(this, recBufSize ?? { sampleRate.nextPowerOfTwo }, recChannels,
 			{arg buf; buf.writeMsg(path, recHeaderFormat, recSampleFormat, 0, 0, true);},
 			this.options.numBuffers + 1); // prevent buffer conflicts by using reserved bufnum
 		recordBuf.path = path;

@@ -168,13 +168,13 @@ void HelpBrowser::closeDocument()
 
 void HelpBrowser::gotoHelpFor( const QString & symbol )
 {
-    QString code = QString("HelpBrowser.openHelpFor(\"%1\")").arg(symbol);
+    QString code = QStringLiteral("HelpBrowser.openHelpFor(\"%1\")").arg(symbol);
     sendRequest(code);
 }
 
 void HelpBrowser::gotoHelpForMethod( const QString & className, const QString & methodName )
 {
-    QString code = QString("HelpBrowser.openHelpForMethod( %1.findMethod(\\%2) )").arg(className, methodName);
+    QString code = QStringLiteral("HelpBrowser.openHelpForMethod( %1.findMethod(\\%2) )").arg(className, methodName);
     sendRequest(code);
 }
 
@@ -190,14 +190,14 @@ void HelpBrowser::onLinkClicked( const QUrl & url )
     foreach ( const QString & extension, nonHelpFileExtensions ) {
         if (urlString.endsWith( extension )) {
             if ( QURL_IS_LOCAL_FILE(url) ) {
-                Main::documentManager()->open(url.toLocalFile());
+                Main::documentManager()->open(url.toLocalFile(), -1, 0, false );
                 return;
             }
             break;
         }
     }
 
-    sendRequest( QString("HelpBrowser.goTo(\"%1\")").arg( urlString ) );
+    sendRequest( QStringLiteral("HelpBrowser.goTo(\"%1\")").arg( urlString ) );
 }
 
 void HelpBrowser::onReload()
@@ -303,6 +303,9 @@ void HelpBrowser::onScResponse( const QString & command, const QString & data )
     urlString.remove(0,1).chop(1);
 
     mWebView->load( urlString );
+  
+    HelpBrowserDocklet *helpDock = MainWindow::instance()->helpBrowserDocklet();
+    if (helpDock) helpDock->focus();
 
     emit urlChanged();
 }
@@ -390,7 +393,7 @@ void HelpBrowser::findReferences()
 HelpBrowserFindBox::HelpBrowserFindBox( QWidget * parent ):
     QLineEdit(parent)
 {
-    setPlaceholderText(tr("Find..."));
+    setPlaceholderText(tr("Find in page..."));
     connect( this, SIGNAL(textChanged(QString)), this, SIGNAL(query(QString)) );
 }
 

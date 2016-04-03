@@ -84,7 +84,6 @@ AudioStatusBox::AudioStatusBox(ScServer *server, QWidget *parent):
     connect(server, SIGNAL(volumeChanged(float)), this, SLOT(updateVolumeLabel(float)));
     connect(server, SIGNAL(mutedChanged(bool)), this, SLOT(updateMuteLabel(bool)));
     connect(server, SIGNAL(recordingChanged(bool)), this, SLOT(updateRecordLabel(bool)));
-    connect(server, SIGNAL(dumpOSCChanged(bool)), this, SLOT(updateDumpOSCLabel(bool)));
 
     onServerRunningChanged(false, "", 0);
     updateVolumeLabel( mServer->volume() );
@@ -128,7 +127,7 @@ void AudioStatusBox::wheelEvent(QWheelEvent * event)
 void AudioStatusBox::updateStatistics()
 {
     QString statusString =
-            QString("%1% %2% %3u %4s %5g %6d ")
+            QStringLiteral("%1% %2% %3u %4s %5g %6d ")
             .arg(m_avg_cpu,  5, 'f', 2)
             .arg(m_peak_cpu, 5, 'f', 2)
             .arg(m_ugens,     4)
@@ -141,7 +140,7 @@ void AudioStatusBox::updateStatistics()
 
 void AudioStatusBox::updateVolumeLabel( float volume )
 {
-    mVolumeLabel->setText( QString("%1dB ").arg( volume, 5, 'f', 1) );
+    mVolumeLabel->setText( QStringLiteral("%1dB ").arg( volume, 5, 'f', 1) );
 }
 
 void AudioStatusBox::updateMuteLabel( bool muted )
