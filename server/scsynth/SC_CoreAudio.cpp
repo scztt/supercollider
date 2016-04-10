@@ -48,6 +48,8 @@ double gSampleRate, gSampleDur;
 
 void sc_SetDenormalFlags();
 
+#define VERBOSE_DEVICE_LOGGING 1
+
 
 // =====================================================================
 // Timing (CoreAudio)
@@ -179,7 +181,17 @@ void initializeScheduler()
 }
 #endif // SC_AUDIO_API_COREAUDIO
 
-
+static void ReportSampleRateList(const char* description, AudioObjectID deviceId, std::vector<AudioValueRange> rates)
+{
+	scprintf("Available %s sample rates: (device %x)\n", description, deviceId);
+	for (auto rate : rates) {
+		if (rate.mMaximum == rate.mMinimum) {
+			scprintf("\t%.1fHz\n", rate.mMaximum);
+		} else {
+			scprintf("\t(%.1f..%.1f)Hz\n", rate.mMinimum, rate.mMaximum);
+		}
+	}
+}
 
 // =====================================================================
 // Packets (Common)
@@ -786,11 +798,19 @@ bool SC_CoreAudioDriver::DriverSetup(int* outNumSamplesPerCallback, double* outS
 		bool sampleRateSupported = false;
 		auto availableSampleRates = GetAvailableNominalSampleRates(mOutputDevice);
 		
+		#ifdef VERBOSE_DEVICE_LOGGING
+			ReportSampleRateList("output", mOutputDevice, availableSampleRates);
+		#endif
+		
 		// If we've got two devices, we need to use a sample rate list from both
 		//  This won't account for cases where there are overlapping ranges, but
 		//  that seems sufficiently edge-case to ignore for now.
 		if (UseSeparateIO()) {
 			auto inputSampleRates = GetAvailableNominalSampleRates(mInputDevice);
+
+			#ifdef VERBOSE_DEVICE_LOGGING
+				ReportSampleRateList("input", mInputDevice, inputSampleRates);
+			#endif
 
 			std::vector<AudioValueRange> availableSampleRatesInputOutput(std::min(availableSampleRates.size(), inputSampleRates.size()));
 			auto rateListIter = std::set_union(
@@ -804,6 +824,10 @@ bool SC_CoreAudioDriver::DriverSetup(int* outNumSamplesPerCallback, double* outS
 			
 			availableSampleRatesInputOutput.resize(rateListIter - availableSampleRatesInputOutput.begin());
 			availableSampleRates = availableSampleRatesInputOutput;
+			
+			#ifdef VERBOSE_DEVICE_LOGGING
+				ReportSampleRateList("input and output", mOutputDevice, availableSampleRates);
+			#endif
 		}
 		
 		for (const AudioValueRange& range : availableSampleRates) {
