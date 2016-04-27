@@ -353,23 +353,23 @@ void initSymbols()
 	gFormatElemTag[obj_slot  ] = -1;
 	gFormatElemTag[obj_double] = 0;
 	gFormatElemTag[obj_float ] = 0;
-	gFormatElemTag[obj_int32  ] = tagInt;
-	gFormatElemTag[obj_int16 ] = tagInt;
-	gFormatElemTag[obj_int8  ] = tagInt;
-	gFormatElemTag[obj_char  ] = tagChar;
-	gFormatElemTag[obj_symbol] = tagSym;
+	gFormatElemTag[obj_int32  ] = static_cast<int>(PyrTag::tagInt);
+	gFormatElemTag[obj_int16 ] = static_cast<int>(PyrTag::tagInt);
+	gFormatElemTag[obj_int8  ] = static_cast<int>(PyrTag::tagInt);
+	gFormatElemTag[obj_char  ] = static_cast<int>(PyrTag::tagChar);
+	gFormatElemTag[obj_symbol] = static_cast<int>(PyrTag::tagSym);
 }
 
 const char *slotSymString(PyrSlot* slot)
 {
 	switch (GetTag(slot)) {
-		case tagObj : return slotRawSymbol(&slotRawObject(slot)->classptr->name)->name;
-		case tagInt : return "Integer";
-		case tagChar : return "Char";
-		case tagSym : return slotRawSymbol(slot)->name;
-		case tagNil : return "Nil";
-		case tagFalse : return "False";
-		case tagTrue : return "True";
+		case PyrTag::tagObj : return slotRawSymbol(&slotRawObject(slot)->classptr->name)->name;
+		case PyrTag::tagInt : return "Integer";
+		case PyrTag::tagChar : return "Char";
+		case PyrTag::tagSym : return slotRawSymbol(slot)->name;
+		case PyrTag::tagNil : return "Nil";
+		case PyrTag::tagFalse : return "False";
+		case PyrTag::tagTrue : return "True";
 		default : return "<float>";
 	}
 }
@@ -2173,15 +2173,15 @@ bool FrameSanity(PyrFrame *frame, const char *tagstr)
 		failed = true;
 	}
 	/*
-	if (frame->caller.utag != tagHFrame && frame->caller.utag != tagNil) {
+	if (frame->caller.utag != tagHFrame && frame->caller.utag != PyrTag::tagNil) {
 		postfl("Frame %p caller tag wrong %p\n", frame, frame->caller.utag);
 		failed = true;
 	}
-	if (frame->context.utag != tagHFrame && frame->context.utag != tagNil) {
+	if (frame->context.utag != tagHFrame && frame->context.utag != PyrTag::tagNil) {
 		postfl("Frame %p context tag wrong %p\n", frame, frame->context.utag);
 		failed = true;
 	}
-	if (frame->homeContext.utag != tagHFrame && frame->homeContext.utag != tagNil) {
+	if (frame->homeContext.utag != tagHFrame && frame->homeContext.utag != PyrTag::tagNil) {
 		postfl("Frame %p homeContext tag wrong %p\n", frame, frame->homeContext.utag);
 		failed = true;
 	}
@@ -2372,7 +2372,7 @@ void nilSlots(PyrSlot* slot, int size)
 void zeroSlots(PyrSlot* slot, int size)
 {
 	PyrSlot zero;
-	SetTagRaw(&zero, 0);
+	SetTagRaw(&zero, PyrTag::tagNotInitialized);
 	SetRaw(&zero, 0.0);
 	fillSlots(slot, size, &zero);
 }
@@ -2778,14 +2778,14 @@ int calcHash(PyrSlot *a)
 {
 	int hash;
 	switch (GetTag(a)) {
-	case tagObj : hash = hashPtr(slotRawObject(a)); break;
-	case tagInt : hash = Hash(slotRawInt(a)); break;
-	case tagChar : hash = Hash(slotRawChar(a) & 255); break;
-	case tagSym : hash = slotRawSymbol(a)->hash; break;
-	case tagNil : hash = 0xA5A5A5A5; break;
-	case tagFalse : hash = 0x55AA55AA; break;
-	case tagTrue : hash = 0x69696969; break;
-	case tagPtr : hash = hashPtr(slotRawPtr(a)); break;
+	case PyrTag::tagObj : hash = hashPtr(slotRawObject(a)); break;
+	case PyrTag::tagInt : hash = Hash(slotRawInt(a)); break;
+	case PyrTag::tagChar : hash = Hash(slotRawChar(a) & 255); break;
+	case PyrTag::tagSym : hash = slotRawSymbol(a)->hash; break;
+	case PyrTag::tagNil : hash = 0xA5A5A5A5; break;
+	case PyrTag::tagFalse : hash = 0x55AA55AA; break;
+	case PyrTag::tagTrue : hash = 0x69696969; break;
+	case PyrTag::tagPtr : hash = hashPtr(slotRawPtr(a)); break;
 	default :
 		// hash for a double
 		union {

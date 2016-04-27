@@ -2153,7 +2153,7 @@ int prObjectShallowCopy(struct VMGlobals *g, int numArgsPushed)
 
 	a = g->sp;
 	switch (GetTag(a)) {
-		case tagObj :
+		case PyrTag::tagObj :
 			SetRaw(a, copyObject(g->gc, slotRawObject(a), true));
 			break;
 		// the default case is to leave the argument unchanged on the stack
@@ -2168,7 +2168,7 @@ int prObjectCopyImmutable(struct VMGlobals *g, int numArgsPushed)
 
 	a = g->sp;
 	switch (GetTag(a)) {
-		case tagObj :
+		case PyrTag::tagObj :
 			if (slotRawObject(a)->obj_flags & obj_immutable) {
 				SetRaw(a, copyObject(g->gc, slotRawObject(a), true));
 			}
@@ -2245,14 +2245,14 @@ bool IsSimpleLiteralSlot(PyrSlot* slot);
 bool IsSimpleLiteralSlot(PyrSlot* slot)
 {
 	switch (GetTag(slot)) {
-		case tagObj : return slotRawObject(slot)->IsPermanent();
-		case tagInt : return true;
-		case tagSym : return true;
-		case tagChar : return true;
-		case tagNil : return true;
-		case tagFalse : return true;
-		case tagTrue : return true;
-		case tagPtr : return false;
+		case PyrTag::tagObj : return slotRawObject(slot)->IsPermanent();
+		case PyrTag::tagInt : return true;
+		case PyrTag::tagSym : return true;
+		case PyrTag::tagChar : return true;
+		case PyrTag::tagNil : return true;
+		case PyrTag::tagFalse : return true;
+		case PyrTag::tagTrue : return true;
+		case PyrTag::tagPtr : return false;
 		default : return true;
 	}
 }

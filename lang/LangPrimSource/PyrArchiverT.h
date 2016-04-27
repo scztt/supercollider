@@ -262,7 +262,7 @@ private:
 		{
 			//postfl("writeSlot %08X\n", GetTag(slot));
 			switch (GetTag(slot)) {
-				case tagObj :
+				case PyrTag::tagObj :
 					if (isKindOf(slotRawObject(slot), class_class)) {
 						return slotRawSymbol(&slotRawClass(slot)->name)->length + 1;
 					} else if (isKindOf(slotRawObject(slot), class_process)) {
@@ -275,19 +275,19 @@ private:
 						return sizeof(int32);
 					}
 					break;
-				case tagInt :
+				case PyrTag::tagInt :
 					return sizeof(int32);
-				case tagSym :
+				case PyrTag::tagSym :
 					return slotRawSymbol(slot)->length + 1;
-				case tagChar :
+				case PyrTag::tagChar :
 					return sizeof(int32);
-				case tagNil :
+				case PyrTag::tagNil :
 					return 0;
-				case tagFalse :
+				case PyrTag::tagFalse :
 					return 0;
-				case tagTrue :
+				case PyrTag::tagTrue :
 					return 0;
-				case tagPtr :
+				case PyrTag::tagPtr :
 					throw std::runtime_error("cannot archive RawPointers.");
 					return 0;
 				default :
@@ -380,7 +380,7 @@ private:
 			PyrObject *obj;
 			//postfl("    writeSlot %08X\n", GetTag(slot));
 			switch (GetTag(slot)) {
-				case tagObj :
+				case PyrTag::tagObj :
 					obj = slotRawObject(slot);
 					if (isKindOf(obj, class_class)) {
 						mStream.writeInt8('C');
@@ -394,28 +394,28 @@ private:
 						mStream.writeInt32_be(obj->scratch1);
 					}
 					break;
-				case tagInt :
+				case PyrTag::tagInt :
 					mStream.writeInt8('i');
 					mStream.writeInt32_be(slotRawInt(slot));
 					break;
-				case tagSym :
+				case PyrTag::tagSym :
 					mStream.writeInt8('s');
 					mStream.writeSymbol(slotRawSymbol(slot)->name);
 					break;
-				case tagChar :
+				case PyrTag::tagChar :
 					mStream.writeInt8('c');
 					mStream.writeInt32_be(slotRawInt(slot));
 					break;
-				case tagNil :
+				case PyrTag::tagNil :
 					mStream.writeInt8('N');
 					break;
-				case tagFalse :
+				case PyrTag::tagFalse :
 					mStream.writeInt8('F');
 					break;
-				case tagTrue :
+				case PyrTag::tagTrue :
 					mStream.writeInt8('T');
 					break;
-				case tagPtr :
+				case PyrTag::tagPtr :
 					mStream.writeInt8('N');
 					break;
 				default :
