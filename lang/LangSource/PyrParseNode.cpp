@@ -3858,8 +3858,6 @@ PyrBlockNode* newPyrBlockNode(PyrArgListNode *arglist, PyrVarListNode *varlist, 
 
 void PyrBlockNode::compile(PyrSlot* slotResult)
 {
-	DebugTableBuilder::get().pushTable();
-
 	PyrBlock *block, *prevBlock;
 	PyrMethodRaw *methraw;
 	int i, j, numArgs, numVars, funcVarArgs;
