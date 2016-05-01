@@ -21,14 +21,17 @@
 #ifndef SC_ASSERT_H
 #define SC_ASSERT_H
 
-#ifndef CLANG_ANALYZER_NORETURN
-	#if __has_feature(attribute_analyzer_noreturn)
-		#define CLANG_ANALYZER_NORETURN __attribute__((analyzer_noreturn))
+#ifndef ANALYZER_NORETURN			
+	#ifdef __clang__
+		#if __has_feature(attribute_analyzer_noreturn)
+			#define ANALYZER_NORETURN __attribute__((analyzer_noreturn))
+		#else
+			#define ANALYZER_NORETURN
+		#endif
 	#else
-		#define CLANG_ANALYZER_NORETURN
+		#define ANALYZER_NORETURN
 	#endif
 #endif
-
 
 #define ASSERTS_ARE_FATAL 0
 #define BOOST_ENABLE_ASSERT_DEBUG_HANDLER
@@ -59,8 +62,8 @@
 
 
 namespace boost {
-  void assertion_failed(char const * expr, char const * function, char const * file, long line) CLANG_ANALYZER_NORETURN;
-  void assertion_failed_msg(char const * expr, char const * msg, char const * function, char const * file, long line) CLANG_ANALYZER_NORETURN;
+  void assertion_failed(char const * expr, char const * function, char const * file, long line) ANALYZER_NORETURN;
+  void assertion_failed_msg(char const * expr, char const * msg, char const * function, char const * file, long line) ANALYZER_NORETURN;
 }
 
 #endif
