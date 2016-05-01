@@ -21,19 +21,43 @@
 #include <stdlib.h>
 #include <string.h>
 #include "SCBase.h"
-#include "InitAlloc.h"
 #include "ByteCodeArray.h"
 #include "Opcodes.h"
 
 ByteCodes gCompilingByteCodes;
 long totalByteCodes = 0;
 
+void ByteCodesBase::push_back(const Byte& byte) {
+	mByteCodes.push_back(byte);
+}
+
+void ByteCodesBase::push_back(ByteCodesRef inByteCodes) {
+	for (auto& entry : inByteCodes->mByteCodes) {
+		mByteCodes.push_back(entry);
+	}
+}
+
+void ByteCodesBase::set_byte(size_t index, const Byte& byte) {
+	if (SC_COND_ASSERT(index < mByteCodes.size())) {
+		mByteCodes[index] = byte;
+	}
+}
+
+size_t ByteCodesBase::length() const {
+	return mByteCodes.size();
+}
+
+void ByteCodesBase::copy_to(Byte* byteArray) const {
+	Byte* iterPtr = byteArray;
+	for (auto& byte : mByteCodes) {
+		*iterPtr = byte;
+		iterPtr++;
+	}
+}
+
 void initByteCodes()
 {
-	if (gCompilingByteCodes) {
-		freeByteCodes(gCompilingByteCodes);
-		gCompilingByteCodes = NULL;
-	}
+	gCompilingByteCodes.reset(new ByteCodesBase);
 }
 
 int compileOpcode(long opcode, long operand1)
@@ -64,15 +88,11 @@ void compileJump(long opcode, long jumplen)
 void compileByte(long byte)
 {
 	if (gCompilingByteCodes == NULL) {
-		gCompilingByteCodes = allocByteCodes();
+		gCompilingByteCodes.reset(new ByteCodesBase);
 	}
-
-	if ((gCompilingByteCodes->ptr - gCompilingByteCodes->bytes)
-		>= gCompilingByteCodes->size) {
-		reallocByteCodes(gCompilingByteCodes);
-	}
+	
 	totalByteCodes++;
-	*gCompilingByteCodes->ptr++ = byte;
+	gCompilingByteCodes->push_back(byte);
 }
 
 int compileNumber(unsigned long value)
@@ -95,20 +115,20 @@ int compileNumber24(unsigned long value)
 void compileAndFreeByteCodes(ByteCodes byteCodes)
 {
 	compileByteCodes(byteCodes);
-	freeByteCodes(byteCodes);
+	freeByteCodes(std::move(byteCodes));
 }
 
-void copyByteCodes(Byte *dest, ByteCodes byteCodes)
+void copyByteCodes(Byte *dest, ByteCodesRef byteCodes)
 {
-  memcpy(dest, byteCodes->bytes, byteCodeLength(byteCodes));
+  byteCodes->copy_to(dest);
 }
 
 ByteCodes getByteCodes()
 {
   ByteCodes	curByteCodes;
 
-  curByteCodes = gCompilingByteCodes;
-  gCompilingByteCodes = NULL;
+  curByteCodes = std::move(gCompilingByteCodes);
+  SC_ASSERT(gCompilingByteCodes == NULL);
 
   return curByteCodes;
 }
@@ -117,21 +137,25 @@ ByteCodes saveByteCodeArray()
 {
 	ByteCodes	curByteCodes;
 
-	curByteCodes = gCompilingByteCodes;
-	gCompilingByteCodes = NULL;
+	curByteCodes = std::move(gCompilingByteCodes);
+	SC_ASSERT(gCompilingByteCodes == NULL);
 
 	return curByteCodes;
 }
 
 void restoreByteCodeArray(ByteCodes byteCodes)
 {
-	gCompilingByteCodes = byteCodes;
+	SC_ASSERT(!gCompilingByteCodes);
+	gCompilingByteCodes = std::move(byteCodes);
 }
 
-size_t byteCodeLength(ByteCodes byteCodes)
+size_t byteCodeLength(ByteCodesRef byteCodes)
 {
-    if (!byteCodes) return 0;
-    return (byteCodes->ptr - byteCodes->bytes);
+  if (!byteCodes) {
+    return 0;
+	} else {
+		return byteCodes->length();
+	}
 }
 
 /***********************************************************************
@@ -140,66 +164,22 @@ size_t byteCodeLength(ByteCodes byteCodes)
  *
  ***********************************************************************/
 
-void compileByteCodes(ByteCodes byteCodes)
+void compileByteCodes(ByteCodesRef byteCodes)
 {
-  Byte		*ptr;
-  int i;
+  SC_ASSERT(byteCodes != NULL);
 
-  if (byteCodes == NULL) return;
-
-  //postfl("[%d]\n", byteCodes->ptr - byteCodes->bytes);
-  for (i=0, ptr = byteCodes->bytes; ptr < byteCodes->ptr; ptr++, ++i) {
-    compileByte(*ptr);
-
-	//postfl("%02X ", *ptr);
-	//if ((i & 15) == 15) postfl("\n");
-  }
-  //postfl("\n\n");
+  totalByteCodes += byteCodes->length();
+  gCompilingByteCodes->push_back(byteCodes);
 }
 
 ByteCodes allocByteCodes()
 {
-	ByteCodes	newByteCodes;
-
-	// pyrmalloc: I think that all bytecodes are copied to objects
-	// lifetime: kill after compile
-	newByteCodes = (ByteCodes)pyr_pool_compile->Alloc(sizeof(ByteCodeArray));
-	MEMFAIL(newByteCodes);
-	newByteCodes->bytes = (Byte *)pyr_pool_compile->Alloc(BYTE_CODE_CHUNK_SIZE);
-	MEMFAIL(newByteCodes->bytes);
-	newByteCodes->ptr = newByteCodes->bytes;
-	newByteCodes->size = BYTE_CODE_CHUNK_SIZE;
-	//postfl("allocByteCodes %0X\n", newByteCodes);
+	ByteCodes	newByteCodes(new ByteCodesBase);
 	return newByteCodes;
 }
 
-void reallocByteCodes(ByteCodes byteCodes)
-{
-	Byte		*newBytes;
-
-	if (byteCodes->size != (byteCodes->ptr - byteCodes->bytes)) {
-		error("reallocByteCodes called with size != byteCode len");
-	}
-
-	size_t newLen = byteCodes->size << 1;
-	// pyrmalloc: I think that all bytecodes are copied to objects
-	// lifetime: kill after compile
-	newBytes = (Byte *)pyr_pool_compile->Alloc(newLen);
-	MEMFAIL(newBytes);
-	memcpy(newBytes, byteCodes->bytes, byteCodes->size);
-	pyr_pool_compile->Free(byteCodes->bytes);
-
-	byteCodes->bytes = newBytes;
-	byteCodes->ptr = newBytes + byteCodes->size;
-	byteCodes->size = newLen;
-}
-
-
 void freeByteCodes(ByteCodes byteCodes)
 {
-	//postfl("freeByteCodes %0X\n", byteCodes);
-	if (byteCodes != NULL) {
-		pyr_pool_compile->Free(byteCodes->bytes);
-		pyr_pool_compile->Free(byteCodes);
-	}
+	SC_ASSERT(byteCodes != NULL);
+	byteCodes.reset(); // memory is free'd here
 }

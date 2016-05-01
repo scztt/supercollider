@@ -21,16 +21,63 @@
 #ifndef LANG_BYTECODEARRAY_H
 #define LANG_BYTECODEARRAY_H
 
+#include "InitAlloc.h"
+#include "SC_Assert.h"
+#include <deque>
 
-typedef unsigned char Byte;
+template <class T>
+class CompilePoolAllocator {
+public:
+  typedef T value_type;
+  
+  CompilePoolAllocator() {}
+  
+  template <class U>
+  CompilePoolAllocator(const CompilePoolAllocator<U>& other) {}
+  
+  T* allocate(std::size_t num)
+  {
+    T* newObj = (T*)pyr_pool_compile->Alloc(sizeof(T) * num);
+    MEMFAIL(newObj);
+    return newObj;
+  }
+  
+  void deallocate(T* p, std::size_t n)
+  {
+    if (SC_COND_ASSERT(p != NULL)) {
+      pyr_pool_compile->Free(p);
+    }
+  }
+};
 
-#define BYTE_CODE_CHUNK_SIZE		64
+// ByteCodes ownership:
+//	ByteCodesBase is always accessed via a unique_ptr, ByteCodes. ByteCodes objects can have only one
+//  owner at a time. std::move always signifies a transfer of ownership, and must be used for functions
+//  which accept a ByteCodes as an argument. After an std::move(byteCodes), byteCodes is NULL and
+//  is no longer accessible. ByteCodesRef represents a non-ownership-transferring argument - no std::move
+//  is required in this case.
+class ByteCodesBase;
+typedef unsigned char																	Byte;
+typedef std::unique_ptr<ByteCodesBase>									ByteCodes;
+typedef const ByteCodes&																ByteCodesRef; // ownership retained by caller
+typedef std::deque<Byte, CompilePoolAllocator<Byte> >	ByteArray;
 
-typedef struct {
-	Byte *bytes;
-	Byte *ptr;
-	size_t size;
-} ByteCodeArray, *ByteCodes;
+class ByteCodesBase {
+public:
+	void		push_back(const Byte& byte);
+	
+					// append bytecodes onto the end of this collection
+	void		push_back(ByteCodesRef inByteCodes);
+	
+	void		set_byte(size_t index, const Byte& byte);
+
+	size_t	length() const;
+
+	void		copy_to(Byte* byteArray) const;
+
+private:
+  ByteArray mByteCodes;
+};
 
 extern ByteCodes gCompilingByteCodes;
 extern long totalByteCodes;
@@ -38,12 +85,12 @@ extern long totalByteCodes;
 void initByteCodes();
 void compileByte(long byte);
 void compileAndFreeByteCodes(ByteCodes byteCodes);
-void copyByteCodes(Byte *dest, ByteCodes byteCodes);
+void copyByteCodes(Byte *dest, ByteCodesRef byteCodes);
 ByteCodes getByteCodes();
 ByteCodes saveByteCodeArray();
 void restoreByteCodeArray(ByteCodes byteCodes);
-size_t byteCodeLength(ByteCodes byteCodes);
-void compileByteCodes(ByteCodes byteCodes);
+size_t byteCodeLength(ByteCodesRef byteCodes);
+void compileByteCodes(ByteCodesRef byteCodes);
 ByteCodes allocByteCodes();
 void reallocByteCodes(ByteCodes byteCodes);
 void freeByteCodes(ByteCodes byteCodes);
