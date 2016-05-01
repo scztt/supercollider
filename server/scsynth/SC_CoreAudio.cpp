@@ -181,6 +181,8 @@ void initializeScheduler()
 }
 #endif // SC_AUDIO_API_COREAUDIO
 
+
+#if SC_AUDIO_API == SC_AUDIO_API_COREAUDIO ||  SC_AUDIO_API == SC_AUDIO_API_AUDIOUNITS
 static void ReportSampleRateList(const char* description, AudioObjectID deviceId, std::vector<AudioValueRange> rates)
 {
 	scprintf("Available %s sample rates: (device %x)\n", description, deviceId);
@@ -192,6 +194,7 @@ static void ReportSampleRateList(const char* description, AudioObjectID deviceId
 		}
 	}
 }
+#endif // SC_AUDIO_API == SC_AUDIO_API_COREAUDIO ||  SC_AUDIO_API == SC_AUDIO_API_AUDIOUNITS
 
 // =====================================================================
 // Packets (Common)
