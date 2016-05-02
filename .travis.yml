@@ -8,7 +8,7 @@ os:
 sudo: required
 dist: trusty
 
-cache: 
+cache:
  - apt
  - bundler
 
@@ -22,8 +22,8 @@ before_install:
  - iflin sudo add-apt-repository --yes ppa:ubuntu-toolchain-r/test
  - iflin sudo add-apt-repository --yes ppa:beineri/opt-qt551-trusty
  - iflin sudo apt-get update
- - iflin sudo apt-get install --yes build-essential gcc-4.9 g++-4.9 cmake pkg-config qt55base qt55location qt55declarative qt55sensors qt55tools qt55webengine qt55webchannel qt55webkit qt55xmlpatterns  libjack-jackd2-dev libsndfile1-dev libasound2-dev libavahi-client-dev libreadline6-dev libfftw3-dev libicu-dev libxt-dev libudev-dev 
- - iflin sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.9 60 --slave /usr/bin/g++ g++ /usr/bin/g++-4.9 
+ - iflin sudo apt-get install --yes build-essential gcc-4.9 g++-4.9 cmake pkg-config qt55base qt55location qt55declarative qt55sensors qt55tools qt55webengine qt55webchannel qt55webkit qt55xmlpatterns  libjack-jackd2-dev libsndfile1-dev libasound2-dev libavahi-client-dev libreadline6-dev libfftw3-dev libicu-dev libxt-dev libudev-dev
+ - iflin sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.9 60 --slave /usr/bin/g++ g++ /usr/bin/g++-4.9
  - iflin sudo update-alternatives --auto gcc
 
 before_script:
@@ -33,19 +33,26 @@ before_script:
 
  - export QT_PREFIX=$HOME/qt/gcc_64
  - export QT_PLUGIN_PATH=$QT_PREFIX/plugins
+ - export COMMIT_NAME=$TRAVIS_COMMIT
  - ifmac cmake -DCMAKE_PREFIX_PATH=`brew --prefix qt55` -DSC_QT=1 -DCMAKE_OSX_DEPLOYMENT_TARGET=10.9 .. --debug-output
  - iflin cmake -DSC_EL=no -DCMAKE_INSTALL_PREFIX:PATH=$PWD/Install -DCMAKE_BUILD_TYPE=Release .. --debug-output
 # some paths
  - ifmac export SCLANG=$TRAVIS_BUILD_DIR/BUILD/Install/SuperCollider/SuperCollider.app/Contents/MacOS/sclang
  - iflin export SCLANG=$TRAVIS_BUILD_DIR/BUILD/Install/bin/sclang
+# prep for testing 
+ - sudo pip install git+https://github.com/scztt/qpm.git@qpm-unit
+ - qpm quark checkout CommonTests CommonTestsGUI --location $HOME/Quarks
+ - cp ../travis_test_run_proto.json ./travis_test_run.json
 
 script:
+# build
  - sudo make install
+# test
  - $TRAVIS_BUILD_DIR/testsuite/sclang/launch_test.py $SCLANG
-
- - export COMMIT_NAME=$TRAVIS_COMMIT
+ - qpm test.run -l ./travis_test_run.json --path $SCLANG --include $HOME/Quarks
+# package
  - ifmac mkdir -p $HOME/artifacts
- - (ifmac cd Install; ifmac zip -r $HOME/artifacts/SC-$COMMIT_NAME.zip SuperCollider)
+ - (ifmac cd Install; ifmac zip -q -r $HOME/artifacts/SC-$COMMIT_NAME.zip SuperCollider)
 
 before_deploy:
  # required for github releases
@@ -93,5 +100,3 @@ notifications:
       - https://webhooks.gitter.im/e/51b9b53ca50a7bfca97d
     on_success: change
     on_failure: always
-  
- 
