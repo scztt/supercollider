@@ -1628,6 +1628,7 @@ void initClasses()
 		addIntrinsicVar(class_fundef, "argNames", &o_nil);
 		addIntrinsicVar(class_fundef, "varNames", &o_nil);
 		addIntrinsicVar(class_fundef, "sourceCode", &o_nil);
+		addIntrinsicVar(class_fundef, "debugTable", &o_nil);
 
 	class_method = makeIntrinsicClass(s_method, s_fundef, 5, 0);
 		addIntrinsicVar(class_method, "ownerClass", &o_nil);

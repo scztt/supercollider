@@ -22,20 +22,41 @@
 #define LANG_BYTECODEARRAY_H
 
 #include "InitAlloc.h"
+#include "DebugTable.h"
 #include "SC_Assert.h"
 #include <deque>
 
 template <class T>
 class CompilePoolAllocator {
 public:
-  typedef T value_type;
-  
+	typedef size_t								size_type;
+	typedef ptrdiff_t							difference_type;
+	typedef T											value_type;
+	typedef value_type*						pointer;
+	typedef const value_type*			const_pointer;
+	typedef value_type&						reference;
+	typedef const value_type&			const_reference;
+
+	template<typename OtherT>
+	struct rebind { typedef CompilePoolAllocator<OtherT> other; };
+	
   CompilePoolAllocator() {}
-  
+	
   template <class U>
   CompilePoolAllocator(const CompilePoolAllocator<U>& other) {}
   
-  T* allocate(std::size_t num)
+	pointer           address(reference x) const { return &x; }
+	const_pointer     address(const_reference x) const { return &x; }
+	CompilePoolAllocator<T>&  operator=(const CompilePoolAllocator<T>&) { return *this; }
+	
+	void              construct(pointer p, const T& val)
+											{ new ((T*) p) T(val); }
+	void              destroy(pointer p)
+											{ p->~T(); }
+	
+	size_type         max_size() const { return size_t(-1); }
+	
+	T* allocate(std::size_t num)
   {
     T* newObj = (T*)pyr_pool_compile->Alloc(sizeof(T) * num);
     MEMFAIL(newObj);
@@ -64,19 +85,24 @@ typedef std::deque<Byte, CompilePoolAllocator<Byte> >	ByteArray;
 
 class ByteCodesBase {
 public:
-	void		push_back(const Byte& byte);
+	void		append(const Byte& byte);
+
+	void		append(const Byte& byte, const DebugTableEntry& dbEntry);
 	
 					// append bytecodes onto the end of this collection
-	void		push_back(ByteCodesRef inByteCodes);
+	void		append(ByteCodesRef inByteCodes);
 	
-	void		set_byte(size_t index, const Byte& byte);
+	void		setByte(size_t index, const Byte& byte);
 
 	size_t	length() const;
 
-	void		copy_to(Byte* byteArray) const;
+	void		copyTo(Byte* byteArray) const;
+
+	void		copyDebugTo(PyrInt32Array& array, int lineOffset=0, int charOffset=0) const;
 
 private:
-  ByteArray mByteCodes;
+	ByteArray		mByteCodes;
+	DebugTable	mDebugTable;
 };
 
 extern ByteCodes gCompilingByteCodes;

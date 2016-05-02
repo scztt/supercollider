@@ -23,23 +23,35 @@
 #include "SCBase.h"
 #include "ByteCodeArray.h"
 #include "Opcodes.h"
+#include "DebugTable.h"
 
 ByteCodes gCompilingByteCodes;
 long totalByteCodes = 0;
 
-void ByteCodesBase::push_back(const Byte& byte) {
+void ByteCodesBase::append(const Byte& byte, const DebugTableEntry& dbEntry) {
+	mDebugTable.addEntry(dbEntry);
 	mByteCodes.push_back(byte);
 }
 
-void ByteCodesBase::push_back(ByteCodesRef inByteCodes) {
-	for (auto& entry : inByteCodes->mByteCodes) {
-		mByteCodes.push_back(entry);
+void ByteCodesBase::append(const Byte& byte) {
+	append(byte, DebugTable::getPosition());
+}
+
+void ByteCodesBase::append(ByteCodesRef inByteCodes) {
+	SC_ASSERT(inByteCodes->mDebugTable.size() == inByteCodes->mByteCodes.size());
+	
+	auto bytecodeIt = inByteCodes->mByteCodes.begin();
+	auto debugIt = inByteCodes->mDebugTable.entries().begin();
+	
+	for ( ; bytecodeIt < inByteCodes->mByteCodes.end(); ++bytecodeIt, ++debugIt) {
+		append(*bytecodeIt, *debugIt);
 	}
 }
 
-void ByteCodesBase::set_byte(size_t index, const Byte& byte) {
+void ByteCodesBase::setByte(size_t index, const Byte& byte) {
 	if (SC_COND_ASSERT(index < mByteCodes.size())) {
 		mByteCodes[index] = byte;
+		mDebugTable.setEntry(index, DebugTable::getPosition());
 	}
 }
 
@@ -47,11 +59,21 @@ size_t ByteCodesBase::length() const {
 	return mByteCodes.size();
 }
 
-void ByteCodesBase::copy_to(Byte* byteArray) const {
+void ByteCodesBase::copyTo(Byte* byteArray) const {
 	Byte* iterPtr = byteArray;
 	for (auto& byte : mByteCodes) {
 		*iterPtr = byte;
 		iterPtr++;
+	}
+}
+
+void ByteCodesBase::copyDebugTo(PyrInt32Array& array, int lineOffset, int charOffset) const
+{
+	SC_ASSERT(array.size == mDebugTable.size() * mDebugTable.kEntrySize);
+	int tableI = 0;
+	for (auto entry : mDebugTable.entries()) {
+		array.i[tableI++]	= entry.getLine() + lineOffset;
+		array.i[tableI++]	= entry.getCharacter() + charOffset;
 	}
 }
 
@@ -92,7 +114,7 @@ void compileByte(long byte)
 	}
 	
 	totalByteCodes++;
-	gCompilingByteCodes->push_back(byte);
+	gCompilingByteCodes->append(byte);
 }
 
 int compileNumber(unsigned long value)
@@ -120,7 +142,7 @@ void compileAndFreeByteCodes(ByteCodes byteCodes)
 
 void copyByteCodes(Byte *dest, ByteCodesRef byteCodes)
 {
-  byteCodes->copy_to(dest);
+  byteCodes->copyTo(dest);
 }
 
 ByteCodes getByteCodes()
@@ -168,8 +190,12 @@ void compileByteCodes(ByteCodesRef byteCodes)
 {
   SC_ASSERT(byteCodes != NULL);
 
+	if (gCompilingByteCodes == NULL) {
+		gCompilingByteCodes.reset(new ByteCodesBase);
+	}
+
   totalByteCodes += byteCodes->length();
-  gCompilingByteCodes->push_back(byteCodes);
+  gCompilingByteCodes->append(byteCodes);
 }
 
 ByteCodes allocByteCodes()

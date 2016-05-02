@@ -89,7 +89,7 @@ void debugf(char *fmt, ...) ;
 int gMaxStackDepth = 0;
 #endif
 
-unsigned char* dumpOneByteCode(PyrBlock *theBlock, PyrClass* theClass, unsigned char *ip);
+unsigned char* dumpOneByteCode(PyrBlock *theBlock, PyrClass* theClass, unsigned char *ip, int line=0, int character=0);
 void dumpSlotOneWord(const char *tagstr, PyrSlot *slot);
 //bool checkAllObjChecksum(PyrObject* obj);
 

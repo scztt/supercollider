@@ -37,6 +37,7 @@
 #include "PredefinedSymbols.h"
 #include "SimpleStack.h"
 #include "PyrPrimitive.h"
+#include "DebugTable.h"
 #include "SC_Win32Utils.h"
 
 AdvancingAllocPool gParseNodePool;
@@ -175,9 +176,17 @@ PyrParseNode::PyrParseNode(int inClassNo)
 	mClassno = inClassNo;
 	mNext = 0;
 	mTail = this;
-	mCharno = ::charno;
 	mLineno = ::lineno;
+	mCharno = ::charno;
+	mLinepos = ::linepos;
+	mErrLineOffset = ::errLineOffset;
 	mParens = 0;
+}
+
+void PyrParseNode::recordDebugPosition() {
+	DebugTable::updatePosition(
+		mLineno + mErrLineOffset,
+		mCharno);
 }
 
 void compileNodeList(PyrParseNode *node, bool onTailBranch)
@@ -1188,7 +1197,9 @@ void installByteCodes(PyrBlock *block)
 {
 	PyrInt8Array *byteArray;
 	long length, flags;
-	ByteCodes byteCodes = getByteCodes();
+
+	ByteCodes byteCodes = getByteCodes(); // deleted at end of scope
+
  	if (byteCodes) {
 	 	length = byteCodeLength(byteCodes);
 	 	if (length) {
@@ -1197,6 +1208,14 @@ void installByteCodes(PyrBlock *block)
 			copyByteCodes(byteArray->b, byteCodes);
 			byteArray->size = length;
 			SetObject(&block->code, byteArray);
+			
+			std::size_t tableSize = length * DebugTable::kEntrySize;
+			PyrInt32Array* debugPositionTable = newPyrInt32Array(compileGC(), tableSize, flags, false);
+			debugPositionTable->size = tableSize;
+			
+			byteCodes->copyDebugTo(*debugPositionTable);
+			
+			SetObject(&block->debugTable, debugPositionTable);
 		} else {
 			error("installByteCodes: zero length byte codes\n");
 		}
@@ -2826,8 +2845,8 @@ void compileSwitchMsg(PyrCallNode* node)
 		PyrSlot *slots = array->slots;
 		{
 			int jumplen = offset - lastOffset;
-			gCompilingByteCodes->set_byte(absoluteOffset + lastOffset - 2, (jumplen >> 8) & 255);
-			gCompilingByteCodes->set_byte(absoluteOffset + lastOffset - 1, jumplen & 255);
+			gCompilingByteCodes->setByte(absoluteOffset + lastOffset - 2, (jumplen >> 8) & 255);
+			gCompilingByteCodes->setByte(absoluteOffset + lastOffset - 1, jumplen & 255);
 		}
 		for (int i=0; i<arraySize; i+=2) {
 			PyrSlot *key = slots + i;
@@ -2839,8 +2858,8 @@ void compileSwitchMsg(PyrCallNode* node)
 				int offsetToHere = slotRawInt(value);
 				if (offsetToHere) {
 					int jumplen = offset - offsetToHere;
-					gCompilingByteCodes->set_byte(absoluteOffset + offsetToHere - 2, (jumplen >> 8) & 255);
-					gCompilingByteCodes->set_byte(absoluteOffset + offsetToHere - 1, jumplen & 255);
+					gCompilingByteCodes->setByte(absoluteOffset + offsetToHere - 2, (jumplen >> 8) & 255);
+					gCompilingByteCodes->setByte(absoluteOffset + offsetToHere - 1, jumplen & 255);
 				}
 			}
 		}

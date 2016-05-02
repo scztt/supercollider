@@ -53,6 +53,7 @@ set(sclang_sources
 	LangPrimSource/PyrUnixPrim.cpp
 	LangSource/AdvancingAllocPool.cpp
 	LangSource/ByteCodeArray.cpp
+	LangSource/DebugTable.cpp
 	LangSource/DumpParseNode.cpp
 	LangSource/GC.cpp
 	LangSource/InitAlloc.cpp
