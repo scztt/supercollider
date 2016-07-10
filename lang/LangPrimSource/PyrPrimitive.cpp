@@ -2084,45 +2084,66 @@ private:
 
 		PyrObject* debugFrameObj = instantiateObject(g->gc, getsym("DebugFrame")->u.classobj, 0, false, false);
 		SetObject(outSlot, debugFrameObj);
+		
+		// Should match slots of sclang DebugFrame
+		enum {
+			functionDefSlot = 0, argsSlot, varsSlot, callerSlot, contextSlot, ipSlot, addressSlot
+		};
 
-		SetObject(debugFrameObj->slots + 0, meth);
-		SetPtr(debugFrameObj->slots + 5, meth);
+		SetObject(debugFrameObj->slots + functionDefSlot, meth);
+		SetPtr(debugFrameObj->slots + addressSlot, meth);
 
 		int numargs = methraw->numargs;
 		int numvars = methraw->numvars;
 		if (numargs) {
 			PyrObject* argArray = (PyrObject*)newPyrArray(g->gc, numargs, 0, false);
-			SetObject(debugFrameObj->slots + 1, argArray);
-			for (int i=0; i<numargs; ++i)
-				slotCopy(&argArray->slots[i], &frame->vars[i]);
+			SetObject(debugFrameObj->slots + argsSlot, argArray);
+			slotCopy((PyrSlot*)&argArray->slots, (PyrSlot*)&frame->vars, numargs);
 
 			argArray->size = numargs;
 		} else
-			SetNil(debugFrameObj->slots + 1);
+			SetNil(debugFrameObj->slots + argsSlot);
 
 		if (numvars) {
 			PyrObject* varArray = (PyrObject*)newPyrArray(g->gc, numvars, 0, false);
-			SetObject(debugFrameObj->slots + 2, varArray);
+			SetObject(debugFrameObj->slots + varsSlot, varArray);
 			for (int i=0, j=numargs; i<numvars; ++i,++j)
 				slotCopy(&varArray->slots[i], &frame->vars[j]);
 
 			varArray->size = numvars;
 		} else
-			SetNil(debugFrameObj->slots + 2);
-
+			SetNil(debugFrameObj->slots + varsSlot);
+		
 		if (slotRawFrame(&frame->caller)) {
-			WorkQueueItem newWork = std::make_pair(slotRawFrame(&frame->caller), debugFrameObj->slots + 3);
+			WorkQueueItem newWork = std::make_pair(slotRawFrame(&frame->caller), debugFrameObj->slots + callerSlot);
 			workQueue.push_back(newWork);
 		} else
-			SetNil(debugFrameObj->slots + 3);
+			SetNil(debugFrameObj->slots + callerSlot);
 
 		if (IsObj(&frame->context) && slotRawFrame(&frame->context) == frame)
-			SetObject(debugFrameObj->slots + 4, debugFrameObj);
+			SetObject(debugFrameObj->slots + contextSlot, debugFrameObj);
 		else if (NotNil(&frame->context)) {
-			WorkQueueItem newWork = std::make_pair(slotRawFrame(&frame->context), debugFrameObj->slots + 4);
+			WorkQueueItem newWork = std::make_pair(slotRawFrame(&frame->context), debugFrameObj->slots + contextSlot);
 			workQueue.push_back(newWork);
 		} else
-			SetNil(debugFrameObj->slots + 4);
+			SetNil(debugFrameObj->slots + contextSlot);
+		
+		int localIp = -1;
+		unsigned char* currentIp = NULL;
+		
+		if (g->frame == frame) {
+			currentIp = g->ip;
+		} else {
+			currentIp = (unsigned char*)slotRawPtr(&frame->ip);
+		}
+		
+		if (currentIp != NULL) {
+			localIp = currentIp - (unsigned char*)slotRawObject(&slotRawMethod(&frame->method)->code)->slots;
+			SC_ASSERT(localIp < 2048);
+			SC_ASSERT(localIp >= 0);
+		}
+
+		SetInt(debugFrameObj->slots + ipSlot, localIp);
 	}
 
 	typedef std::pair<PyrFrame*, PyrSlot*> WorkQueueItem;
