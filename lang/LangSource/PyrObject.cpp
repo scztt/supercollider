@@ -1623,7 +1623,7 @@ void initClasses() {
     fixClassArrays(class_arrayed_collection);
     fixClassArrays(class_array);
 
-    class_fundef = makeIntrinsicClass(s_fundef, s_object, 10, 0);
+    class_fundef = makeIntrinsicClass(s_fundef, s_object, 12, 0);
     // declare varNames for Block
 
     addIntrinsicVar(class_fundef, "raw1", &o_nil);
@@ -1638,13 +1638,13 @@ void initClasses() {
     addIntrinsicVar(class_fundef, "varNames", &o_nil);
     addIntrinsicVar(class_fundef, "sourceCode", &o_nil);
     addIntrinsicVar(class_fundef, "debugTable", &o_nil);
+    addIntrinsicVar(class_fundef, "filenameSymbol", &o_nil);
+    addIntrinsicVar(class_fundef, "charPos", &o_zero);
 
-    class_method = makeIntrinsicClass(s_method, s_fundef, 5, 0);
+    class_method = makeIntrinsicClass(s_method, s_fundef, 3, 0);
     addIntrinsicVar(class_method, "ownerClass", &o_nil);
     addIntrinsicVar(class_method, "name", &o_nil);
     addIntrinsicVar(class_method, "primitiveName", &o_nil);
-    addIntrinsicVar(class_method, "filenameSymbol", &o_nil);
-    addIntrinsicVar(class_method, "charPos", &o_zero);
     // addIntrinsicVar(class_method, "byteMeter", &o_zero);
     // addIntrinsicVar(class_method, "callMeter", &o_zero);
 
